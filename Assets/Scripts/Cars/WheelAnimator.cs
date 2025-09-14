@@ -33,7 +33,7 @@ public class WheelAnimator : MonoBehaviour
         if (carAI == null) return;
 
         // --- Spin based on forward speed ---
-        float distanceThisFrame = carAI.speed * Time.deltaTime;
+        float distanceThisFrame = carAI.CurrentSpeed * Time.deltaTime;
         float spinDegrees = (distanceThisFrame / (2f * Mathf.PI * wheelRadius)) * 360f;
         wheelSpin += spinDegrees;
 
