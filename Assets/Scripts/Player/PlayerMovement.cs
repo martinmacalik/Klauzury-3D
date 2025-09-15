@@ -38,6 +38,10 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
+        // If this script or the CharacterController is disabled, bail out
+        if (!enabled) return;
+        if (characterController == null || !characterController.enabled || !gameObject.activeInHierarchy) return;
+        
         // --- Look ---
         if (canMove)
         {

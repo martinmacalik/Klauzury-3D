@@ -66,27 +66,21 @@ public class CarAI : MonoBehaviour
 
     SimpleTrafficLightController GetNearestController()
     {
-        SimpleTrafficLightController nearest = null;
-        float best = float.PositiveInfinity;
+        SimpleTrafficLightController bestCtrl = null;
+        float bestDist = float.PositiveInfinity;
+        var list = SimpleTrafficLightController.All.Count > 0
+            ? SimpleTrafficLightController.All
+            : new System.Collections.Generic.List<SimpleTrafficLightController>(FindObjectsOfType<SimpleTrafficLightController>());
 
-        if (SimpleTrafficLightController.All.Count > 0)
+        foreach (var ctrl in list)
         {
-            foreach (var ctrl in SimpleTrafficLightController.All)
-            {
-                if (!ctrl) continue;
-                float d = Vector3.Distance(transform.position, ctrl.transform.position);
-                if (d < best) { best = d; nearest = ctrl; }
-            }
+            if (!ctrl) continue;
+            if (!ctrl.IsCarAtThisJunction(transform)) continue; // only consider controllers whose stop spheres contain us
+
+            float d = Vector3.Distance(transform.position, ctrl.transform.position);
+            if (d < bestDist) { bestDist = d; bestCtrl = ctrl; }
         }
-        else
-        {
-            foreach (var ctrl in FindObjectsOfType<SimpleTrafficLightController>())
-            {
-                if (!ctrl) continue;
-                float d = Vector3.Distance(transform.position, ctrl.transform.position);
-                if (d < best) { best = d; nearest = ctrl; }
-            }
-        }
-        return nearest;
+        return bestCtrl; // null if we’re not “at” any junction yet
     }
+
 }

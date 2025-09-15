@@ -5,8 +5,7 @@ public class SimpleTrafficLightController : MonoBehaviour
 {
     [Header("Approaches (2–4)")]
     public Transform[] lights;                // place at stop points
-    [Tooltip("Same length as 'lights'. True = STOP leg (may go on red if green is clear long enough). False = normal traffic-light leg.")]
-    public bool[] stopOnly;
+    public bool[] stopOnly;                   // true = STOP leg; false = normal traffic-light leg
 
     [Header("Cycle")]
     public float cycleTime = 5f;
@@ -14,13 +13,9 @@ public class SimpleTrafficLightController : MonoBehaviour
     public Color greenColor = Color.green;
 
     [Header("Stopping / Occupancy")]
-    [Tooltip("Cars are considered 'at' an approach if within this radius of its Transform. Also used to detect cars on the GREEN approach.")]
-    public float stopRadius = 6f;
-    [Tooltip("After the green leg becomes empty or switches, STOP legs still wait this long before going.")]
-    public float graceAfterGreenClear = 3f;
-
-    [Tooltip("Layer(s) containing car colliders. Put your cars on this layer.")]
-    public LayerMask carLayer = ~0; // default: everything
+    public float stopRadius = 6f;             // also used to detect cars on approaches
+    public float graceAfterGreenClear = 3f;   // used only when there are normal TL legs
+    public LayerMask carLayer = ~0;
 
     [Header("Gizmos")]
     public float gizmoLightSize = 0.5f;
@@ -30,7 +25,6 @@ public class SimpleTrafficLightController : MonoBehaviour
     private float timer = 0f;
     private float lastGreenOccupiedTime = Mathf.NegativeInfinity;
 
-    // Registry
     public static readonly List<SimpleTrafficLightController> All = new List<SimpleTrafficLightController>();
     void OnEnable()  { if (!All.Contains(this)) All.Add(this); }
     void OnDisable() { All.Remove(this); }
@@ -40,39 +34,26 @@ public class SimpleTrafficLightController : MonoBehaviour
         if (stopOnly == null || stopOnly.Length != (lights?.Length ?? 0))
             stopOnly = new bool[lights?.Length ?? 0];
         UpdateLights();
-        lastGreenOccupiedTime = Time.time; // start grace at scene load
+        lastGreenOccupiedTime = Time.time;
     }
 
     void Update()
     {
         if (lights == null || lights.Length == 0) return;
 
-        // Cycle
         timer += Time.deltaTime;
         if (timer >= cycleTime)
         {
             timer = 0f;
             currentIndex = (currentIndex + 1) % lights.Length;
             UpdateLights();
-            lastGreenOccupiedTime = Time.time; // grace starts on every switch
+            lastGreenOccupiedTime = Time.time; // start/refresh grace on switch
         }
 
-        // GREEN OCCUPANCY (uses stopRadius)
-        if (IsValidIndex(currentIndex))
+        // Track occupancy of the current green (for grace when TL legs exist)
+        if (HasAnyTrafficLightLeg() && IsValidIndex(currentIndex) && IsApproachOccupied(currentIndex, null))
         {
-            const int Max = 16;
-            Collider[] hits = new Collider[Max];
-            int count = Physics.OverlapSphereNonAlloc(
-                lights[currentIndex].position,
-                stopRadius,
-                hits,
-                carLayer,
-                QueryTriggerInteraction.Collide
-            );
-            if (count > 0)
-            {
-                lastGreenOccupiedTime = Time.time; // refresh grace while occupied
-            }
+            lastGreenOccupiedTime = Time.time;
         }
     }
 
@@ -86,12 +67,13 @@ public class SimpleTrafficLightController : MonoBehaviour
         }
     }
 
-    /// Returns true if THIS controller wants the car to stop.
+    // ---------- NEW/UPDATED LOGIC BELOW ----------
+
     public bool ShouldStopForCar(Transform carTransform, float currentSpeed, float brakeAccel)
     {
         if (lights == null || lights.Length == 0) return false;
 
-        // Which approach are we at? (closest within stopRadius)
+        // Which approach is the car at (within stopRadius)?
         int atIdx = -1;
         float bestDist = float.PositiveInfinity;
         Vector3 carPos = carTransform.position; carPos.y = 0f;
@@ -109,29 +91,112 @@ public class SimpleTrafficLightController : MonoBehaviour
             }
         }
 
-        if (atIdx < 0) return false;           // not at this junction
+        if (atIdx < 0) return false;            // not at this junction
+
+        bool anyTrafficLightLeg = HasAnyTrafficLightLeg();
+
+        if (!anyTrafficLightLeg)
+        {
+            // -------- PURE STOP JUNCTION --------
+            int occupied = CountOccupiedApproaches(carTransform);
+
+            if (occupied <= 1)
+                return false;                   // alone here -> go
+
+            // 2+ approaches occupied -> use cycle to arbitrate
+            return atIdx != currentIndex;       // stop unless it's your cycle turn
+        }
+
+        // -------- MIXED JUNCTION (STOP + TL) --------
         if (atIdx == currentIndex) return false; // green for this approach -> go
 
         bool isStopLeg = (stopOnly != null && atIdx < stopOnly.Length) ? stopOnly[atIdx] : false;
 
         if (!isStopLeg)
         {
-            // Normal traffic-light leg → obey red
+            // Normal traffic-light leg → obey red with a bit of stopping-distance leniency
             float stoppingDistance = (currentSpeed * currentSpeed) / (2f * Mathf.Max(0.01f, brakeAccel)) + 1f;
             return bestDist <= Mathf.Max(stopRadius, stoppingDistance);
         }
+        else
+        {
+            // STOP leg rules:
+            // 1) If the GREEN is occupied now OR within grace → STOP.
+            bool greenOccupiedNow   = IsValidIndex(currentIndex) && IsApproachOccupied(currentIndex, carTransform);
+            bool withinGraceWindow  = (Time.time - lastGreenOccupiedTime) <= graceAfterGreenClear;
+            if (greenOccupiedNow || withinGraceWindow)
+                return true;
 
-        // STOP leg logic with grace
-        bool withinGrace = (Time.time - lastGreenOccupiedTime) <= graceAfterGreenClear;
+            // 2) If multiple approaches are present now → cycle arbitrates.
+            int occupied = CountOccupiedApproaches(carTransform);
+            if (occupied >= 2)
+                return atIdx != currentIndex;
 
-        // Must stop if green was occupied recently
-        if (withinGrace) return true;
+            // 3) Otherwise you're alone → go.
+            return false;
+        }
+    }
 
-        // Otherwise (green empty for longer than grace), STOP leg may go
+    bool HasAnyTrafficLightLeg()
+    {
+        if (stopOnly == null || lights == null) return false;
+        for (int i = 0; i < lights.Length && i < stopOnly.Length; i++)
+            if (lights[i] && !stopOnly[i]) return true;
         return false;
     }
 
-    private bool IsValidIndex(int i) => lights != null && i >= 0 && i < lights.Length && lights[i] != null;
+    bool IsApproachOccupied(int idx, Transform selfToIgnore)
+    {
+        if (!IsValidIndex(idx)) return false;
+
+        const int Max = 16;
+        Collider[] hits = new Collider[Max];
+        int count = Physics.OverlapSphereNonAlloc(
+            lights[idx].position, stopRadius, hits, carLayer, QueryTriggerInteraction.Collide);
+
+        for (int i = 0; i < count; i++)
+        {
+            var h = hits[i];
+            if (!h) continue;
+
+            // ignore self if provided
+            if (selfToIgnore && (h.transform == selfToIgnore || h.transform.IsChildOf(selfToIgnore)))
+                continue;
+
+            if (h.GetComponentInParent<CarAI>()) // only count actual cars
+                return true;
+        }
+        return false;
+    }
+
+    int CountOccupiedApproaches(Transform selfToIgnore)
+    {
+        int occupied = 0;
+        if (lights == null) return 0;
+        for (int i = 0; i < lights.Length; i++)
+        {
+            if (!lights[i]) continue;
+            if (IsApproachOccupied(i, selfToIgnore))
+                occupied++;
+        }
+        return occupied;
+    }
+
+    private bool IsValidIndex(int i) =>
+        lights != null && i >= 0 && i < lights.Length && lights[i] != null;
+    
+    public bool IsCarAtThisJunction(Transform carTransform)
+    {
+        if (lights == null) return false;
+        Vector3 carPos = carTransform.position; carPos.y = 0f;
+        for (int i = 0; i < lights.Length; i++)
+        {
+            if (!lights[i]) continue;
+            Vector3 p = lights[i].position; p.y = 0f;
+            if (Vector3.Distance(carPos, p) <= stopRadius) return true;
+        }
+        return false;
+    }
 
     void OnDrawGizmos()
     {
