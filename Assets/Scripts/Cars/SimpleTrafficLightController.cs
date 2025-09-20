@@ -163,7 +163,7 @@ public class SimpleTrafficLightController : MonoBehaviour
             if (selfToIgnore && (h.transform == selfToIgnore || h.transform.IsChildOf(selfToIgnore)))
                 continue;
 
-            if (h.GetComponentInParent<CarAI>()) // only count actual cars
+            if (h.GetComponentInParent<CarAIDriver>()) // only count actual cars
                 return true;
         }
         return false;
