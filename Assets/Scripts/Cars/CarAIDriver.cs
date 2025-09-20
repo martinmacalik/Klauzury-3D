@@ -92,13 +92,13 @@ public class CarAIDriver : MonoBehaviour
     }
 
     // Allow other systems to enable/disable AI driving
-    public void EnableAI(bool enabled)
+    public void EnableAI(bool state)
     {
-        enabled = enabled && (waypoints != null && waypoints.Length > 0);
-        enabledSelf = enabled;
-        car.SetControlMode(enabled ? WheelCarController.ControlMode.External
-                                   : WheelCarController.ControlMode.Player);
+        enabledSelf = state && (waypoints != null && waypoints.Length > 0);
+        car.SetControlMode(enabledSelf ? WheelCarController.ControlMode.External
+            : WheelCarController.ControlMode.Player);
     }
+
 
     bool enabledSelf = true;
     void OnEnable()  { car.SetControlMode(WheelCarController.ControlMode.External); }
