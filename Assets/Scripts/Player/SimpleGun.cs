@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 public class SimpleGun : MonoBehaviour
@@ -7,8 +8,8 @@ public class SimpleGun : MonoBehaviour
     [SerializeField] Animator animator;
     [Tooltip("Tip of the barrel: used for muzzle flash & tracer start.")]
     [SerializeField] Transform muzzle;
-    [Tooltip("Optional: a ParticleSystem already placed under the muzzle.")]
-    [SerializeField] GameObject muzzleFlashPrefab; // optional prefab alternative
+    [Tooltip("Muzzle flash PREFAB (instantiated as a child of the muzzle).")]
+    [SerializeField] GameObject muzzleFlashPrefab;
 
     [Header("Shooting")]
     [SerializeField] float range = 150f;
@@ -16,6 +17,7 @@ public class SimpleGun : MonoBehaviour
     [SerializeField] float hipSpread = 1.25f;
     [SerializeField] float adsSpread = 0.35f;
     [SerializeField] float fireCooldown = 0.12f;
+    [SerializeField] int damage = 1;               // <-- public in Inspector
     float nextFireTime;
 
     [Header("ADS")]
@@ -26,12 +28,11 @@ public class SimpleGun : MonoBehaviour
     [Header("Hit FX")]
     [SerializeField] GameObject hitFxPrefab;
     [SerializeField] float hitFxLifetime = 5f;
-    
-    [Header("Tracer FX")]
-    [SerializeField] GameObject tracerPrefab;    // assign TracerRay prefab
-    [SerializeField] float tracerSpeed = 250f;   // meters/sec (visual speed)
-    [SerializeField] float tracerStay = 0.04f;   // how long it lingers after impact
 
+    [Header("Tracer FX")]
+    [SerializeField] GameObject tracerPrefab;     // optional LineRenderer prefab
+    [SerializeField] float tracerSpeed = 300f;    // m/s (visual)
+    [SerializeField] float tracerStay = 0.04f;    // linger time
 
     // Animator hashes
     static readonly int Hash_IsADS   = Animator.StringToHash("IsADS");
@@ -42,12 +43,11 @@ public class SimpleGun : MonoBehaviour
     {
         if (!playerCam) Debug.LogError("SimpleGun: playerCam not set", this);
         if (!animator) Debug.LogWarning("SimpleGun: animator not set", this);
-        if (!muzzle)   Debug.LogWarning("SimpleGun: muzzle not set – using camera fallback.", this);
+        if (!muzzle)   Debug.LogWarning("SimpleGun: muzzle not set – assign a barrel tip.", this);
     }
 
     void Update()
     {
-        // Authoritative lock check from WeaponHotkeys
         bool isLocked = !WeaponHotkeys.GunIsReady;
 
         if (isLocked)
@@ -56,18 +56,19 @@ public class SimpleGun : MonoBehaviour
             {
                 animator.ResetTrigger(Hash_Fire);
                 animator.SetBool(Hash_IsADS, false);
-                animator.SetBool("IsReady", false);
+                animator.SetBool(Hash_IsReady, false);
             }
             LerpFOV(false);
             return;
         }
 
-        if (animator) animator.SetBool("IsReady", true);
+        if (animator) animator.SetBool(Hash_IsReady, true);
 
         bool wantADS = Input.GetMouseButton(1);
         if (animator) animator.SetBool(Hash_IsADS, wantADS);
         LerpFOV(wantADS);
 
+        // No fire from Update — TryFire() will enforce ADS requirement.
         if (Input.GetMouseButton(0))
             TryFire();
     }
@@ -82,8 +83,12 @@ public class SimpleGun : MonoBehaviour
     void TryFire()
     {
         if (!WeaponHotkeys.GunIsReady) return;
-        if (Time.time < nextFireTime) return;
-        if (!playerCam) return;
+        if (Time.time < nextFireTime)  return;
+        if (!playerCam)                return;
+
+        // >>> MUST be in ADS to shoot <<<
+        bool isADS = animator ? animator.GetBool(Hash_IsADS) : Input.GetMouseButton(1);
+        if (!isADS) return;
 
         nextFireTime = Time.time + fireCooldown;
 
@@ -94,30 +99,22 @@ public class SimpleGun : MonoBehaviour
         }
         else if (muzzleFlashPrefab)
         {
-            // Spawn as a child of the muzzle so it always aligns & follows recoil this frame
-            var go = Instantiate(muzzleFlashPrefab, muzzle, false); // local pos/rot = (0,0,0)
-    
-            // Ensure all systems use Local space (so the flash sticks to the gun)
+            var go = Instantiate(muzzleFlashPrefab, muzzle, false); // local 0,0,0
             float life = 0.25f;
             var psAll = go.GetComponentsInChildren<ParticleSystem>(true);
             foreach (var ps in psAll)
             {
                 var main = ps.main;
                 main.simulationSpace = ParticleSystemSimulationSpace.Local;
-                // accumulate a safe lifetime for cleanup
                 life = Mathf.Max(life, main.duration + main.startLifetimeMultiplier);
                 ps.Play(true);
             }
-
-            // Auto-destroy after it finishes
             Destroy(go, life);
         }
 
-
-
         if (animator) animator.SetTrigger(Hash_Fire);
 
-        // Shoot immediately (or let anim event call DoShoot if you prefer timing)
+        // Shoot immediately (or gate by an animation event if you prefer)
         DoShoot();
     }
 
@@ -135,41 +132,42 @@ public class SimpleGun : MonoBehaviour
         Vector3 targetPoint;
         RaycastHit camHit;
 
-        // 2) Camera decides what we hit
+        // 2) Camera decides what we aim at
         if (Physics.Raycast(aimRay.origin, aimDir, out camHit, range, hitMask, QueryTriggerInteraction.Ignore))
-        {
-            //camHit.collider.GetComponent<IDamageable>()?.TakeDamage(1);
             targetPoint = camHit.point;
-        }
         else
-        {
             targetPoint = aimRay.origin + aimDir * range;
-        }
 
         // 3) Barrel obstruction check
         Vector3 muzzlePos = muzzle ? muzzle.position : aimRay.origin;
         if (muzzle)
         {
             if (Physics.Linecast(muzzlePos, targetPoint, out var barrelHit, hitMask, QueryTriggerInteraction.Ignore))
-            {
                 targetPoint = barrelHit.point;
-                //barrelHit.collider.GetComponent<IDamageable>()?.TakeDamage(1);
-            }
         }
 
-        // 4) Impact FX (if something was hit)
+        // 4) Tracer (visual)
+        SpawnTracer(muzzlePos, targetPoint);
+
+        // 5) Real hit ray from the muzzle (authoritative impact)
         Vector3 vfxDir = (targetPoint - muzzlePos).normalized;
-        if (hitFxPrefab)
+        if (Physics.Raycast(muzzlePos, vfxDir, out var fxHit, range, hitMask, QueryTriggerInteraction.Ignore))
         {
-            if (Physics.Raycast(muzzlePos, vfxDir, out var fxHit, range, hitMask, QueryTriggerInteraction.Ignore))
+            // Impact VFX
+            if (hitFxPrefab)
             {
                 var rot = Quaternion.LookRotation(fxHit.normal);
                 var fx  = Instantiate(hitFxPrefab, fxHit.point, rot);
                 Destroy(fx, hitFxLifetime);
             }
+
+            // Damage via interface — uses serialized 'damage'
+            fxHit.collider.GetComponent<IDamageable>()?.TakeDamage(damage);
+
+            // Optional physics impulse
+            if (fxHit.rigidbody)
+                fxHit.rigidbody.AddForceAtPosition(vfxDir * 10f, fxHit.point, ForceMode.Impulse);
         }
-        // 5) Tracer FX
-        SpawnTracer(muzzlePos, targetPoint);
     }
 
     Vector3 ApplySpread(Vector3 forward, float spreadDeg, Transform basis)
@@ -180,86 +178,83 @@ public class SimpleGun : MonoBehaviour
         Quaternion q = Quaternion.AngleAxis(pitch, basis.right) * Quaternion.AngleAxis(yaw, basis.up);
         return (q * forward).normalized;
     }
-    
+
+    // --------- Tracer ----------
     void SpawnTracer(Vector3 start, Vector3 end)
-{
-    // One-frame editor line so you can see where it *should* be
-    Debug.DrawLine(start, end, Color.yellow, 0.05f);
-
-    LineRenderer lr = null;
-
-    if (tracerPrefab)
     {
-        var go = Instantiate(tracerPrefab);
-        lr = go.GetComponent<LineRenderer>();
-        if (!lr) lr = go.AddComponent<LineRenderer>();
-    }
-    else
-    {
-        // Build a minimal tracer at runtime
-        var go = new GameObject("TracerRay (auto)");
-        lr = go.AddComponent<LineRenderer>();
-    }
+        Debug.DrawLine(start, end, Color.yellow, 0.05f);
 
-    // Ensure visible settings
-    lr.useWorldSpace = true;
-    lr.positionCount = 2;
-    lr.alignment = LineAlignment.View; // faces camera
-    lr.textureMode = LineTextureMode.Stretch;
-    lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-    lr.receiveShadows = false;
-    lr.numCapVertices = 0;
-    lr.numCornerVertices = 0;
+        LineRenderer lr = null;
 
-    // Width you can actually see
-    float w = 0.02f; // ~2 cm at world scale
-    lr.startWidth = w;
-    lr.endWidth   = w;
-
-    // Make sure it has a material and visible color (URP/HDRP safe-ish)
-    if (!lr.sharedMaterial)
-    {
-        Shader sh =
-            Shader.Find("Universal Render Pipeline/Unlit") ??
-            Shader.Find("HDRP/Unlit") ??
-            Shader.Find("Unlit/Color");
-        var mat = new Material(sh);
-        if (sh.name.Contains("Unlit"))
+        if (tracerPrefab)
         {
-            // set a bright color property if available
+            var go = Instantiate(tracerPrefab);
+            lr = go.GetComponent<LineRenderer>();
+            if (!lr) lr = go.AddComponent<LineRenderer>();
+        }
+        else
+        {
+            var go = new GameObject("TracerRay (auto)");
+            lr = go.AddComponent<LineRenderer>();
+        }
+
+        lr.useWorldSpace = true;
+        lr.positionCount = 2;
+        lr.alignment = LineAlignment.View;
+        lr.textureMode = LineTextureMode.Stretch;
+        lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        lr.receiveShadows = false;
+        lr.numCapVertices = 0;
+        lr.numCornerVertices = 0;
+        float w = 0.02f;
+        lr.startWidth = w;
+        lr.endWidth   = w;
+
+        if (!lr.sharedMaterial)
+        {
+            Shader sh =
+                Shader.Find("Universal Render Pipeline/Unlit") ??
+                Shader.Find("HDRP/Unlit") ??
+                Shader.Find("Unlit/Color");
+            var mat = new Material(sh);
             if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", Color.white);
             else if (mat.HasProperty("_Color")) mat.SetColor("_Color", Color.white);
+            lr.sharedMaterial = mat;
         }
-        lr.sharedMaterial = mat;
-    }
-    // For Unlit/Color fallback:
-    if (lr.sharedMaterial.HasProperty("_Color"))
-        lr.sharedMaterial.SetColor("_Color", Color.white);
 
-    // Place at start, then animate tip to end
-    lr.SetPosition(0, start);
-    lr.SetPosition(1, start);
-    StartCoroutine(AnimateTracer(lr, start, end, tracerSpeed, tracerStay));
-}
-
-System.Collections.IEnumerator AnimateTracer(LineRenderer lr, Vector3 start, Vector3 end, float speed, float stay)
-{
-    float dist = Vector3.Distance(start, end);
-    float travelTime = Mathf.Max(0.001f, dist / Mathf.Max(1f, tracerSpeed));
-    float t = 0f;
-
-    while (t < 1f && lr)
-    {
-        t += Time.deltaTime / travelTime;
-        Vector3 tip = Vector3.Lerp(start, end, t);
         lr.SetPosition(0, start);
-        lr.SetPosition(1, tip);
-        yield return null;
+        lr.SetPosition(1, start);
+        StartCoroutine(AnimateTracer(lr, start, end, tracerSpeed, tracerStay));
     }
 
-    if (lr && stay > 0f) yield return new WaitForSeconds(stay);
-    if (lr) Destroy(lr.gameObject);
-}
+    IEnumerator AnimateTracer(LineRenderer lr, Vector3 start, Vector3 end, float speed, float stay)
+    {
+        float dist = Vector3.Distance(start, end);
+        float travelTime = Mathf.Max(0.001f, dist / Mathf.Max(1f, speed));
+        float t = 0f;
 
+        while (t < 1f && lr)
+        {
+            t += Time.deltaTime / travelTime;
+            Vector3 tip = Vector3.Lerp(start, end, t);
+            lr.SetPosition(0, start);
+            lr.SetPosition(1, tip);
+            yield return null;
+        }
 
+        if (lr && stay > 0f) yield return new WaitForSeconds(stay);
+        if (lr) Destroy(lr.gameObject);
+    }
+
+#if UNITY_EDITOR
+    void OnDrawGizmosSelected()
+    {
+        if (muzzle)
+        {
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireSphere(muzzle.position, 0.01f);
+            Gizmos.DrawRay(muzzle.position, muzzle.forward * 0.2f);
+        }
+    }
+#endif
 }
