@@ -12,7 +12,11 @@ public class DummyEnemy : MonoBehaviour, IDamageable
         // quick visual: flash color if it has a renderer
         var rend = GetComponentInChildren<Renderer>();
         if (rend) StartCoroutine(Flash(rend));
-        if (hp <= 0 && destroyOnDeath) Destroy(gameObject);
+        if (hp <= 0 && destroyOnDeath)
+        {
+            Destroy(gameObject);
+            TestosteroneSystem.Instance?.Gain(20f);
+        }
     }
 
     System.Collections.IEnumerator Flash(Renderer r)

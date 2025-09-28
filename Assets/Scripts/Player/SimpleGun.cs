@@ -17,7 +17,7 @@ public class SimpleGun : MonoBehaviour
     [SerializeField] float hipSpread = 1.25f;
     [SerializeField] float adsSpread = 0.35f;
     [SerializeField] float fireCooldown = 0.12f;
-    [SerializeField] int damage = 1;               // <-- public in Inspector
+    [SerializeField] int damage = 10;               // <-- public in Inspector
     float nextFireTime;
 
     [Header("ADS")]
