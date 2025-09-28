@@ -27,6 +27,8 @@ public class CarEnterExit : MonoBehaviour
     [SerializeField] float postExitBrake = 0.6f;      // 0..1 (negative throttle internally)
     [SerializeField] float stopSpeedThreshold = 0.25f; // m/s at which we consider it "stopped"
     [SerializeField] float maxBrakeTime = 2.5f;        // hard cap so it never holds forever
+    
+    [SerializeField] SimpleGun gun;   // (optional) assign in Inspector
 
     bool inCar;
     bool playerInTrigger;
@@ -56,6 +58,9 @@ public class CarEnterExit : MonoBehaviour
         }
 
         if (carCamera) carCamera.gameObject.SetActive(false);
+        
+        if (!gun && playerRoot)
+            gun = playerRoot.GetComponentInChildren<SimpleGun>(true);
     }
 
     void OnTriggerEnter(Collider other)
@@ -106,6 +111,7 @@ public class CarEnterExit : MonoBehaviour
         }
 
         // hide player (disables their FPS cam + movement)
+        HardLockWeapon();   
         playerRoot.SetActive(false);
         inCar = true;
 
@@ -140,6 +146,7 @@ public class CarEnterExit : MonoBehaviour
         // show player again
         playerRoot.transform.SetPositionAndRotation(worldPos, worldRot);
         playerRoot.SetActive(true);
+        HardLockWeapon();   
 
         // turn off car cam
         if (carCamera) carCamera.gameObject.SetActive(false);
@@ -182,4 +189,19 @@ public class CarEnterExit : MonoBehaviour
         carController.SetExternalInputs(0f, 0f);
         brakeCo = null;
     }
+    
+    void HardLockWeapon()
+    {
+        // Global lock – SimpleGun already respects this gate.
+        WeaponHotkeys.GunIsReady = false;
+
+        // Optional: snap animator out of ADS immediately if you want no flicker.
+        if (gun && gun.TryGetComponent<Animator>(out var a))
+        {
+            a.ResetTrigger("Fire");
+            a.SetBool("IsADS", false);
+            a.SetBool("IsReady", false);
+        }
+    }
+
 }

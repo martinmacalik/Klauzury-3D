@@ -986,6 +986,74 @@ Transform:
   m_Children: []
   m_Father: {fileID: 5663633509770050547}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2089768832695198049
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4604322755617135066}
+  - component: {fileID: 6385090130652034623}
+  - component: {fileID: 8759590291824121428}
+  m_Layer: 0
+  m_Name: Driver Head
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4604322755617135066
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2089768832695198049}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.49, y: 0.46, z: -0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 2521971860684328080}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!135 &6385090130652034623
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2089768832695198049}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 0.29170233
+  m_Center: {x: 0.10210794, y: -0.07864559, z: 0.048452254}
+--- !u!114 &8759590291824121428
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2089768832695198049}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb4bdfaee359c76479a118c48f01a39f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  car: {fileID: 3261575385168854440}
+  health: 1
 --- !u!1 &2503815164143752412
 GameObject:
   m_ObjectHideFlags: 0
@@ -1031,6 +1099,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2521971860684328080}
   - component: {fileID: 3110717095050773852}
+  - component: {fileID: 3261575385168854440}
   - component: {fileID: 3161302847493674903}
   - component: {fileID: 7040652964033419101}
   - component: {fileID: 1907273236847746721}
@@ -1061,6 +1130,7 @@ Transform:
   - {fileID: 118966227314516465}
   - {fileID: 418763672020604376}
   - {fileID: 7823141245770196828}
+  - {fileID: 4604322755617135066}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: -92.071, z: 0}
 --- !u!54 &3110717095050773852
@@ -1090,6 +1160,24 @@ Rigidbody:
   m_Interpolate: 1
   m_Constraints: 0
   m_CollisionDetection: 0
+--- !u!114 &3261575385168854440
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2531626282353065785}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 41e56dd898275ca42983ff1c9c3bb565, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ai: {fileID: 7040652964033419101}
+  car: {fileID: 3161302847493674903}
+  stopBlendSeconds: 1
+  brakeStrength: 0.75
+  stopThreshold: 0.25
+  allowPlayerTakeover: 1
 --- !u!114 &3161302847493674903
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1429,6 +1517,7 @@ MonoBehaviour:
   postExitBrake: 0.6
   stopSpeedThreshold: 0.25
   maxBrakeTime: 2.5
+  gun: {fileID: 0}
 --- !u!1 &9020678474741926249
 GameObject:
   m_ObjectHideFlags: 0
