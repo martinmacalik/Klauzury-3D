@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 3353572}
   - component: {fileID: 2391836}
   - component: {fileID: 64815026682686836}
+  - component: {fileID: 941880518569683662}
   m_Layer: 7
   m_Name: SM_Env_Road_Patch_01
   m_TagString: Untagged
@@ -109,3 +110,23 @@ MeshCollider:
   m_Convex: 0
   m_CookingOptions: 30
   m_Mesh: {fileID: 4300000, guid: 4e878d01561e49e41be1e9bee4545a66, type: 3}
+--- !u!114 &941880518569683662
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 117160}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1e3fdca004f2d45fe8abbed571a8abd5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_SerializedVersion: 0
+  m_OverrideArea: 1
+  m_Area: 1
+  m_OverrideGenerateLinks: 0
+  m_GenerateLinks: 0
+  m_IgnoreFromBuild: 0
+  m_ApplyToChildren: 1
+  m_AffectedAgents: ffffffff

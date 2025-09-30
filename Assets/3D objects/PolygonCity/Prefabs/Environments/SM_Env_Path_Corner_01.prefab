@@ -15,6 +15,7 @@ GameObject:
   - component: {fileID: 64994866947278710}
   - component: {fileID: 64112238855073136}
   - component: {fileID: 64093302768147432}
+  - component: {fileID: -4508682646684900172}
   m_Layer: 7
   m_Name: SM_Env_Path_Corner_01
   m_TagString: Untagged
@@ -178,3 +179,23 @@ MeshCollider:
   m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 43413088213885712, guid: 480666a54926bdc4795d132f23699a1d, type: 2}
+--- !u!114 &-4508682646684900172
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 148314}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1e3fdca004f2d45fe8abbed571a8abd5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_SerializedVersion: 0
+  m_OverrideArea: 1
+  m_Area: 0
+  m_OverrideGenerateLinks: 0
+  m_GenerateLinks: 0
+  m_IgnoreFromBuild: 0
+  m_ApplyToChildren: 1
+  m_AffectedAgents: ffffffff
