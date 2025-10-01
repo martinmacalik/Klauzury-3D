@@ -162,7 +162,10 @@ public class SimpleGun : MonoBehaviour
             }
 
             // Damage via interface — uses serialized 'damage'
-            fxHit.collider.GetComponent<IDamageable>()?.TakeDamage(damage);
+            if (fxHit.collider.TryGetComponent<DamageHitbox>(out var box))
+                box.ApplyDamage(damage);
+            else
+                fxHit.collider.GetComponentInParent<IDamageable>()?.TakeDamage(damage);
 
             // Optional physics impulse
             if (fxHit.rigidbody)
