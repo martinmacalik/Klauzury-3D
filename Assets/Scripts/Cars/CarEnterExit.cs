@@ -13,6 +13,9 @@ public class CarEnterExit : MonoBehaviour
     [SerializeField] Camera carCamera;              // disabled by default; enabled while driving
     [SerializeField] Transform carCamAnchor;        // snap pose for car camera (optional)
 
+    // reference to state to hide/show NPC driver body
+    [SerializeField] CarDriverState driverState;   // NEW
+
     // exit placement
     [SerializeField] Transform exitAnchor;          // optional exact exit spot
     [SerializeField] float exitRightMeters = 1.5f;  // fallback offsets if no anchor
@@ -25,16 +28,18 @@ public class CarEnterExit : MonoBehaviour
 
     // post-exit braking (no Rigidbody drag monkeying)
     [SerializeField] float postExitBrake = 0.6f;      // 0..1 (negative throttle internally)
-    [SerializeField] float stopSpeedThreshold = 0.25f; // m/s at which we consider it "stopped"
-    [SerializeField] float maxBrakeTime = 2.5f;        // hard cap so it never holds forever
-    
-    [SerializeField] SimpleGun gun;   // (optional) assign in Inspector
+    [SerializeField] float stopSpeedThreshold = 0.25f;
+    [SerializeField] float maxBrakeTime = 1.25f;
 
-    bool inCar;
-    bool playerInTrigger;
-    bool aiLockedOut;            // once player drives, AI never comes back
+    // gating
+    [SerializeField] float maxEnterSpeed = 1.5f;   // must be almost stopped to enter
+    [SerializeField] float maxExitSpeed  = 1.0f;   // must be basically stopped to exit
+
+    // internals
+    bool inCar = false;
+    bool aiLockedOut = false;   // once player drives, AI won't reenable on exit
     Coroutine brakeCo;
-
+    SimpleGun gun;
     Rigidbody rb;                // for speed check
 
     void Reset()
@@ -42,11 +47,15 @@ public class CarEnterExit : MonoBehaviour
         enterTrigger = GetComponent<Collider>();
         carController = GetComponentInParent<WheelCarController>();
         aiDriver = GetComponentInParent<CarAIDriver>();
+        driverState = GetComponentInParent<CarDriverState>();   // NEW
     }
 
     void Awake()
     {
         if (enterTrigger) enterTrigger.isTrigger = true;
+
+        
+        if (!driverState) driverState = GetComponentInParent<CarDriverState>(); // NEW
 
         // get a Rigidbody to read speed (prefer on same root as controller)
         rb = GetComponentInParent<Rigidbody>();
@@ -65,25 +74,31 @@ public class CarEnterExit : MonoBehaviour
 
     void OnTriggerEnter(Collider other)
     {
-        if (!playerRoot) return;
-        if (other.transform == playerRoot.transform || other.CompareTag("Player"))
-            playerInTrigger = true;
-    }
-
-    void OnTriggerExit(Collider other)
-    {
-        if (!playerRoot) return;
-        if (other.transform == playerRoot.transform || other.CompareTag("Player"))
-            playerInTrigger = false;
+        // optional: could check player tag here for UI prompts, etc.
     }
 
     void Update()
     {
-        if (!inCar && playerInTrigger && Input.GetKeyDown(enterKey))
-            EnterCar();
+        if (!playerRoot || !carController) return;
 
-        if (inCar && Input.GetKeyDown(exitKey))
-            ExitCar();
+        // basic key handling; you might swap to your input system
+        if (!inCar)
+        {
+            // only enter if we're basically stopped
+            float speed = rb ? rb.linearVelocity.magnitude : 0f;
+            if (speed <= maxEnterSpeed && Input.GetKeyDown(enterKey))
+            {
+                EnterCar();
+            }
+        }
+        else
+        {
+            float speed = rb ? rb.linearVelocity.magnitude : 0f;
+            if (speed <= maxExitSpeed && Input.GetKeyDown(exitKey))
+            {
+                ExitCar();
+            }
+        }
     }
 
     void EnterCar()
@@ -97,6 +112,10 @@ public class CarEnterExit : MonoBehaviour
         // give controls to player
         carController.SetControlMode(WheelCarController.ControlMode.Player);
         carController.SetExternalInputs(0f, 0f); // clear any lingering external input
+
+        // Hide the NPC body immediately when we take the seat
+        if (driverState) driverState.HideDriverBody();  // NEW
+
 
         // snap & enable car camera
         if (carCamera)
@@ -134,22 +153,27 @@ public class CarEnterExit : MonoBehaviour
         }
         else
         {
-            worldPos = transform.position + transform.right * exitRightMeters + transform.forward * exitForwardMeters;
-            worldRot = Quaternion.LookRotation(new Vector3(transform.forward.x, 0f, transform.forward.z), Vector3.up);
+            // default: a little to the right of car, slightly forward, snapped to ground
+            var basePos = carController.transform.position 
+                          + carController.transform.right * exitRightMeters
+                          + carController.transform.forward * exitForwardMeters;
 
-            // drop to ground if needed
-            Ray ray = new Ray(worldPos + Vector3.up * groundRaycast, Vector3.down);
-            if (Physics.Raycast(ray, out var hit, groundRaycast * 2f, ~0, QueryTriggerInteraction.Ignore))
+            // ground snap via raycast
+            if (Physics.Raycast(new Ray(basePos + Vector3.up * groundRaycast, Vector3.down), out var hit, groundRaycast * 2f, ~0, QueryTriggerInteraction.Ignore))
                 worldPos = hit.point;
+            else
+                worldPos = basePos;
+
+            worldRot = Quaternion.LookRotation(carController.transform.forward, Vector3.up);
         }
 
-        // show player again
+        // disable car camera
+        if (carCamera) carCamera.gameObject.SetActive(false);
+
+        // unhide player and place them
         playerRoot.transform.SetPositionAndRotation(worldPos, worldRot);
         playerRoot.SetActive(true);
-        HardLockWeapon();   
-
-        // turn off car cam
-        if (carCamera) carCamera.gameObject.SetActive(false);
+        WeaponHotkeys.GunIsReady = true;
 
         // do NOT re-enable AI if we've ever driven this car
         if (aiDriver && !aiLockedOut)
@@ -181,15 +205,17 @@ public class CarEnterExit : MonoBehaviour
             if (speed <= stopSpeedThreshold) break;
 
             carController.SetExternalInputs(-Mathf.Clamp01(postExitBrake), 0f);
+
             t += Time.deltaTime;
             yield return null;
         }
 
-        // release inputs after stopping or timeout
+        // release control and neutral input
         carController.SetExternalInputs(0f, 0f);
-        brakeCo = null;
     }
-    
+
+    // --- helpers ---
+
     void HardLockWeapon()
     {
         // Global lock – SimpleGun already respects this gate.

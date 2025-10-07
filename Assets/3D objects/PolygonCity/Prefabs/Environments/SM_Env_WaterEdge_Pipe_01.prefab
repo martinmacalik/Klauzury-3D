@@ -15,7 +15,7 @@ GameObject:
   - component: {fileID: 64817982920876396}
   - component: {fileID: 64258971087947130}
   - component: {fileID: 64764884830161194}
-  m_Layer: 7
+  m_Layer: 0
   m_Name: SM_Env_WaterEdge_Pipe_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}

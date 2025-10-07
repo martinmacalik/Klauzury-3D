@@ -15,7 +15,7 @@ GameObject:
   - component: {fileID: 64181919653948672}
   - component: {fileID: 64798439037361596}
   - component: {fileID: 64585553700490996}
-  m_Layer: 7
+  m_Layer: 0
   m_Name: SM_Env_WaterEdge_Corner_02
   m_TagString: Untagged
   m_Icon: {fileID: 0}
