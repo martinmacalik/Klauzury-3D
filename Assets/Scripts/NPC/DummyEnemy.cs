@@ -14,6 +14,12 @@ public class DummyEnemy : MonoBehaviour, IDamageable
         if (rend) StartCoroutine(Flash(rend));
         if (hp <= 0 && destroyOnDeath)
         {
+            // +1 kill in the menu
+            PlayerMenuController.Instance?.AddKillScore(1);
+            
+            // DROP CASH HERE
+            GetComponent<MoneyDropper>()?.Drop();
+            
             Destroy(gameObject);
             TestosteroneSystem.Instance?.Gain(20f);
         }

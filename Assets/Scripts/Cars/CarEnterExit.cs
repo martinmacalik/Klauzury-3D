@@ -3,9 +3,13 @@ using UnityEngine;
 
 public class CarEnterExit : MonoBehaviour
 {
+    // ---- Static: global lock so only one car reacts to enter/exit at a time ----
+    public static CarEnterExit Active { get; private set; }
+    static float globalEnterCooldownUntil = 0f;
+
     // core refs
     [SerializeField] WheelCarController carController;
-    [SerializeField] CarAIDriver aiDriver;          // optional; will stay off after first player drive
+    [SerializeField] CarAIDriver aiDriver;          // optional; stays off after first player drive
     [SerializeField] GameObject playerRoot;         // has PlayerMovement + its own camera
     [SerializeField] Collider enterTrigger;         // trigger around the car (isTrigger = true)
 
@@ -14,7 +18,7 @@ public class CarEnterExit : MonoBehaviour
     [SerializeField] Transform carCamAnchor;        // snap pose for car camera (optional)
 
     // reference to state to hide/show NPC driver body
-    [SerializeField] CarDriverState driverState;   // NEW
+    [SerializeField] CarDriverState driverState;    // optional
 
     // exit placement
     [SerializeField] Transform exitAnchor;          // optional exact exit spot
@@ -26,18 +30,24 @@ public class CarEnterExit : MonoBehaviour
     [SerializeField] KeyCode enterKey = KeyCode.E;
     [SerializeField] KeyCode exitKey  = KeyCode.F;
 
-    // post-exit braking (no Rigidbody drag monkeying)
+    // post-exit braking
     [SerializeField] float postExitBrake = 0.6f;      // 0..1 (negative throttle internally)
     [SerializeField] float stopSpeedThreshold = 0.25f;
     [SerializeField] float maxBrakeTime = 1.25f;
+    [SerializeField] float parkedDrag = 3.0f;          // higher drag while parked so it stays put
+    [SerializeField] float parkedAngularDrag = 2.0f;
+    float originalDrag, originalAngularDrag;
 
     // gating
     [SerializeField] float maxEnterSpeed = 1.5f;   // must be almost stopped to enter
     [SerializeField] float maxExitSpeed  = 1.0f;   // must be basically stopped to exit
+    [SerializeField] float reenterBlockSeconds = 0.35f; // cooldown after exit
 
     // internals
     bool inCar = false;
     bool aiLockedOut = false;   // once player drives, AI won't reenable on exit
+    bool playerInTrigger = false;
+    float localEnterCooldownUntil = 0f; // per-car cooldown
     Coroutine brakeCo;
     SimpleGun gun;
     Rigidbody rb;                // for speed check
@@ -47,56 +57,92 @@ public class CarEnterExit : MonoBehaviour
         enterTrigger = GetComponent<Collider>();
         carController = GetComponentInParent<WheelCarController>();
         aiDriver = GetComponentInParent<CarAIDriver>();
-        driverState = GetComponentInParent<CarDriverState>();   // NEW
+        driverState = GetComponentInParent<CarDriverState>();
     }
 
     void Awake()
     {
         if (enterTrigger) enterTrigger.isTrigger = true;
 
-        
-        if (!driverState) driverState = GetComponentInParent<CarDriverState>(); // NEW
+        if (!driverState) driverState = GetComponentInParent<CarDriverState>();
 
-        // get a Rigidbody to read speed (prefer on same root as controller)
+        // obtain RB for speed checks
         rb = GetComponentInParent<Rigidbody>();
         if (!rb && carController != null)
         {
-            // try common pattern: public RB getter on controller
             var prop = carController.GetType().GetProperty("RB");
             if (prop != null) rb = prop.GetValue(carController) as Rigidbody;
         }
 
         if (carCamera) carCamera.gameObject.SetActive(false);
-        
+
         if (!gun && playerRoot)
             gun = playerRoot.GetComponentInChildren<SimpleGun>(true);
+
+        // IMPORTANT: make sure idle cars ignore player input
+        if (carController)
+        {
+            carController.SetControlMode(WheelCarController.ControlMode.External);
+            carController.SetExternalInputs(0f, 0f);
+        }
+        
+        if (rb)
+        {
+            originalDrag = rb.linearDamping;
+            originalAngularDrag = rb.angularDamping;
+        }
+
+        // Optional: if this car should **start** as the one you drive, set inCar true and call EnterCar() from Start().
     }
 
     void OnTriggerEnter(Collider other)
     {
-        // optional: could check player tag here for UI prompts, etc.
+        if (!playerRoot) return;
+        if (IsPlayerCollider(other)) playerInTrigger = true;
+        // (Show your "Press E to enter" UI here if you like)
+    }
+
+    void OnTriggerExit(Collider other)
+    {
+        if (!playerRoot) return;
+        if (IsPlayerCollider(other)) playerInTrigger = false;
+        // (Hide the prompt UI here)
+    }
+
+    bool IsPlayerCollider(Collider other)
+    {
+        var root = other.attachedRigidbody ? other.attachedRigidbody.transform.root : other.transform.root;
+        return root == playerRoot.transform;
     }
 
     void Update()
     {
         if (!playerRoot || !carController) return;
 
-        // basic key handling; you might swap to your input system
-        if (!inCar)
+        // only the active car (or none) can react; must also be physically near THIS car
+        bool canAttemptEnter = !inCar
+                               && playerInTrigger
+                               && Active == null
+                               && Time.time >= localEnterCooldownUntil
+                               && Time.time >= globalEnterCooldownUntil;
+
+        if (canAttemptEnter && Input.GetKeyDown(enterKey))
         {
-            // only enter if we're basically stopped
             float speed = rb ? rb.linearVelocity.magnitude : 0f;
-            if (speed <= maxEnterSpeed && Input.GetKeyDown(enterKey))
+            if (speed <= maxEnterSpeed)
             {
                 EnterCar();
+                return;
             }
         }
-        else
+
+        if (inCar && Input.GetKeyDown(exitKey))
         {
             float speed = rb ? rb.linearVelocity.magnitude : 0f;
-            if (speed <= maxExitSpeed && Input.GetKeyDown(exitKey))
+            if (speed <= maxExitSpeed)
             {
                 ExitCar();
+                return;
             }
         }
     }
@@ -104,6 +150,9 @@ public class CarEnterExit : MonoBehaviour
     void EnterCar()
     {
         if (!playerRoot || !carController) return;
+
+        // global lock
+        Active = this;
 
         // lock out AI forever after the first player drive
         aiLockedOut = true;
@@ -114,8 +163,7 @@ public class CarEnterExit : MonoBehaviour
         carController.SetExternalInputs(0f, 0f); // clear any lingering external input
 
         // Hide the NPC body immediately when we take the seat
-        if (driverState) driverState.HideDriverBody();  // NEW
-
+        if (driverState) driverState.HideDriverBody();
 
         // snap & enable car camera
         if (carCamera)
@@ -130,12 +178,23 @@ public class CarEnterExit : MonoBehaviour
         }
 
         // hide player (disables their FPS cam + movement)
-        HardLockWeapon();   
+        HardLockWeapon();
         playerRoot.SetActive(false);
         inCar = true;
 
         // stop any post-exit brake from previous cycle
         if (brakeCo != null) { StopCoroutine(brakeCo); brakeCo = null; }
+        
+        // restore normal physics (unpark)
+        if (rb)
+        {
+            rb.linearDamping = originalDrag;
+            rb.angularDamping = originalAngularDrag;
+        }
+
+        // take control
+        carController.SetControlMode(WheelCarController.ControlMode.Player);
+        carController.SetExternalInputs(0f, 0f); // clear any lingering external input
     }
 
     void ExitCar()
@@ -153,13 +212,13 @@ public class CarEnterExit : MonoBehaviour
         }
         else
         {
-            // default: a little to the right of car, slightly forward, snapped to ground
-            var basePos = carController.transform.position 
+            // default: right side, slightly forward, snap to ground
+            var basePos = carController.transform.position
                           + carController.transform.right * exitRightMeters
                           + carController.transform.forward * exitForwardMeters;
 
-            // ground snap via raycast
-            if (Physics.Raycast(new Ray(basePos + Vector3.up * groundRaycast, Vector3.down), out var hit, groundRaycast * 2f, ~0, QueryTriggerInteraction.Ignore))
+            if (Physics.Raycast(new Ray(basePos + Vector3.up * groundRaycast, Vector3.down),
+                                out var hit, groundRaycast * 2f, ~0, QueryTriggerInteraction.Ignore))
                 worldPos = hit.point;
             else
                 worldPos = basePos;
@@ -189,39 +248,65 @@ public class CarEnterExit : MonoBehaviour
 
             // start a brief braking phase so it rolls to a stop
             if (brakeCo != null) StopCoroutine(brakeCo);
-            brakeCo = StartCoroutine(PostExitBrakeCoast());
+            brakeCo = StartCoroutine(PostExitBrakeThenPark());
         }
 
         inCar = false;
+
+        // release global lock + start small cooldown so we don't instantly snap into another car
+        Active = null;
+        localEnterCooldownUntil = Time.time + reenterBlockSeconds;
+        globalEnterCooldownUntil = Time.time + reenterBlockSeconds;
+
+        // also, mark we're no longer inside trigger until physics says so (prevents single-frame re-entry)
+        playerInTrigger = false;
+        
+        // hand off control to External and CLEAR inputs right away
+        carController.SetControlMode(WheelCarController.ControlMode.External);
+        carController.SetExternalInputs(0f, 0f);
+
+        // start a brief braking phase → then park
+        if (brakeCo != null) StopCoroutine(brakeCo);
+        brakeCo = StartCoroutine(PostExitBrakeThenPark());
     }
 
-    IEnumerator PostExitBrakeCoast()
+    IEnumerator PostExitBrakeThenPark()
     {
         float t = 0f;
-        // apply a gentle "negative throttle" as brake, no steering
+
+        // Phase 1: gentle braking until stopped or timeout
         while (t < maxBrakeTime)
         {
-            float speed = rb ? rb.linearVelocity.magnitude : Mathf.Infinity;
+            float speed = rb ? rb.linearVelocity.magnitude : 0f;  // <- use velocity, not linearVelocity
             if (speed <= stopSpeedThreshold) break;
 
+            // negative "throttle" as a brake, no steering
             carController.SetExternalInputs(-Mathf.Clamp01(postExitBrake), 0f);
 
             t += Time.deltaTime;
             yield return null;
         }
 
-        // release control and neutral input
+        // Neutralize inputs
         carController.SetExternalInputs(0f, 0f);
+
+        // Phase 2: park — increase drag so it stays put, and zero out motion
+        if (rb)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            rb.linearDamping = parkedDrag;
+            rb.angularDamping = parkedAngularDrag;
+        }
     }
+
 
     // --- helpers ---
 
     void HardLockWeapon()
     {
-        // Global lock – SimpleGun already respects this gate.
         WeaponHotkeys.GunIsReady = false;
 
-        // Optional: snap animator out of ADS immediately if you want no flicker.
         if (gun && gun.TryGetComponent<Animator>(out var a))
         {
             a.ResetTrigger("Fire");
@@ -229,5 +314,4 @@ public class CarEnterExit : MonoBehaviour
             a.SetBool("IsReady", false);
         }
     }
-
 }
