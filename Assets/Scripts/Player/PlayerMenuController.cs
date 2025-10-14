@@ -58,7 +58,8 @@ public class PlayerMenuController : MonoBehaviour
     private bool _prevVisible;
 
     // runtime state
-    public int Money { get; private set; }
+    [SerializeField, Min(0)] private int money = 0;   // editable in Inspector at runtime
+    public int Money => money;                         // read-only accessor
     public int Gems  { get; private set; }
     public int Kills { get; private set; }
     public int StarLevel { get; private set; } // 0..totalStars
@@ -72,6 +73,8 @@ public class PlayerMenuController : MonoBehaviour
     void Awake()
     {
         Instance = this;
+        
+        money = Mathf.Max(0, money); // just ensures clamped from Inspector
         
         if (!menuPanel) { Debug.LogWarning("PlayerMenuController: menuPanel not assigned."); return; }
 
@@ -134,7 +137,11 @@ public class PlayerMenuController : MonoBehaviour
         SetMenuVisible(!menuPanel.activeSelf, force: true);
     }
 
-    public void AddMoney(int amount) { Money = Mathf.Max(0, Money + amount); RefreshCounters(); }
+    public void AddMoney(int amount)
+    {
+        money = Mathf.Max(0, money + amount);
+        RefreshCounters();
+    }
     public void AddGems(int amount)  { Gems  = Mathf.Max(0, Gems  + amount); RefreshCounters(); }
     public void AddKillScore(int amount = 1) { Kills = Mathf.Max(0, Kills + amount); RefreshCounters(); }
 
@@ -284,4 +291,14 @@ public class PlayerMenuController : MonoBehaviour
         int level = Mathf.Max(1, Mathf.RoundToInt(normalized * totalStars));
         SetStarLevel(level);
     }
+    
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        // Clamp and refresh UI in edit & play mode when you tweak the Inspector value
+        money = Mathf.Max(0, money);
+        if (Application.isPlaying) RefreshCounters();
+    }
+#endif
+
 }
