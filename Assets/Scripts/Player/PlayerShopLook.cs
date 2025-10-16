@@ -11,21 +11,27 @@ public class PlayerShopLook : MonoBehaviour
     public ShopTooltipUI tooltip;
 
     [Header("Input")]
-    public KeyCode addToBasketKey = KeyCode.E;
-    public KeyCode payKey = KeyCode.F;
+    public KeyCode addToBasketKey = KeyCode.E;   // E to add
+    public KeyCode payKey = KeyCode.E;           // E to pay when NOT aiming an item
 
     [Header("Stability")]
     public float reticleSphereRadius = 0.02f; // small spherecast helps with tiny colliders
 
     ShopItem _currentAim;
     Basket _basket;
+    
+    static int _lastAddFrame = -1;
 
     void Awake()
     {
         if (!cam) cam = Camera.main;
         if (!tooltip) Debug.LogWarning("[PlayerShopLook] Tooltip reference is missing.");
-        _basket = GetComponent<Basket>(); // must be on the player
-        if (!_basket) Debug.LogWarning("[PlayerShopLook] No Basket found on player.");
+
+        // Be more flexible: look on this object first, then parents/children.
+        _basket = GetComponent<Basket>();
+        if (!_basket) _basket = GetComponentInParent<Basket>();
+        if (!_basket) _basket = GetComponentInChildren<Basket>();
+        if (!_basket) Debug.LogWarning("[PlayerShopLook] No Basket found. Add Basket to the player object.");
     }
 
     void Update()
@@ -43,6 +49,7 @@ public class PlayerShopLook : MonoBehaviour
         {
             Ray ray = new Ray(cam.transform.position, cam.transform.forward);
 
+            // Spherecast first (friendlier for small colliders), then fallback to raycast
             bool hit = Physics.SphereCast(ray, reticleSphereRadius, out RaycastHit info, interactDistance, shopMask, QueryTriggerInteraction.Collide);
             if (!hit) hit = Physics.Raycast(ray, out info, interactDistance, shopMask, QueryTriggerInteraction.Collide);
 
@@ -62,12 +69,21 @@ public class PlayerShopLook : MonoBehaviour
 
         if (_currentAim)
         {
+            // Aiming at an item → show “add” hint
             string hint = $"Press {addToBasketKey} to put in basket";
             tooltip.Show(_currentAim.itemName, _currentAim.price, hint);
         }
         else
         {
-            tooltip.Hide();
+            // Not aiming at an item → if we can pay, show a pay hint
+            if (_basket != null && _basket.items != null && _basket.items.Count > 0 && _basket.canPayHere)
+            {
+                tooltip.Show("Checkout", _basket.Total, $"Press {payKey} to pay");
+            }
+            else
+            {
+                tooltip.Hide();
+            }
         }
     }
 
@@ -75,22 +91,24 @@ public class PlayerShopLook : MonoBehaviour
     {
         if (_basket == null) return;
 
-        if (Input.GetKeyDown(addToBasketKey) && _currentAim)
+        // 1) Add to basket when aiming at an item
+        if (_currentAim && Input.GetKeyDown(addToBasketKey))
         {
-            _basket.Add(_currentAim.itemName, _currentAim.price);
-            // Optional: sound or tiny flash on the item
+            // Debounce: if some other script already added this frame, skip
+            if (Time.frameCount == _lastAddFrame) return;
+
+            _basket.Add(_currentAim.itemName, _currentAim.price); // updates UI & onChanged
+            _lastAddFrame = Time.frameCount;                       // mark this frame as consumed
+            return;
         }
 
-        if (Input.GetKeyDown(payKey))
+        // 2) Pay when NOT aiming at an item (if you kept this behavior)
+        if (!_currentAim && Input.GetKeyDown(payKey))
         {
-            bool ok = _basket.TryPayUsingMenuMoney(); // uses PlayerMenuController.Instance
-            if (!ok)
-            {
-                // Optional feedback: not in cashier zone OR not enough money.
-                // You could blink Basket UI or play a deny sound here.
-            }
+            _basket.TryPayUsingMenuMoney();
         }
     }
+
 
 #if UNITY_EDITOR
     void OnDrawGizmosSelected()

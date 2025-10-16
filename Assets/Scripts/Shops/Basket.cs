@@ -15,6 +15,11 @@ public class Basket : MonoBehaviour
     public List<Item> items = new List<Item>();
     public UnityEvent onChanged;
     public UnityEvent onPaid;
+    
+    // Global, per-frame guard against duplicate adds (any caller)
+    static int _lastAddFrame = -1;
+    static string _lastAddName;
+    static int _lastAddPrice;
 
     [Tooltip("Becomes true while inside the Cashier trigger.")]
     public bool canPayHere = false;
@@ -25,6 +30,14 @@ public class Basket : MonoBehaviour
 
     public void Add(string name, int price)
     {
+        // If another script already added the same item this frame, ignore
+        if (Time.frameCount == _lastAddFrame && _lastAddName == name && _lastAddPrice == price)
+            return;
+
+        _lastAddFrame = Time.frameCount;
+        _lastAddName = name;
+        _lastAddPrice = price;
+
         items.Add(new Item(name, price));
         onChanged?.Invoke();
     }
