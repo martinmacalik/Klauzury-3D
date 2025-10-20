@@ -92,15 +92,23 @@ public class PlayerShopLook : MonoBehaviour
         if (_basket == null) return;
 
         // 1) Add to basket when aiming at an item
-        if (_currentAim && Input.GetKeyDown(addToBasketKey))
+        // PlayerShopLook.cs (inside HandleInput)
+        // When NOT aiming at an item and pressing payKey, run PNG purchase:
+        if (!_currentAim && Input.GetKeyDown(payKey))
         {
-            // Debounce: if some other script already added this frame, skip
-            if (Time.frameCount == _lastAddFrame) return;
+            var inv = InventoryManager.Instance ?? FindObjectOfType<InventoryManager>(true); // includeInactive = true
+            Debug.Log($"[LOOK] Pay pressed. inv={(inv ? inv.name : "null")}, basket={( _basket ? _basket.name : "null")}, canPayHere={_basket?.canPayHere}");
 
-            _basket.Add(_currentAim.itemName, _currentAim.price); // updates UI & onChanged
-            _lastAddFrame = Time.frameCount;                       // mark this frame as consumed
-            return;
+            if (!inv)
+            {
+                Debug.LogError("[LOOK] No InventoryManager found. Add one to the scene (active) and assign slots+database.");
+                return;
+            }
+
+            inv.PurchaseBasket(_basket);
         }
+
+
 
         // 2) Pay when NOT aiming at an item (if you kept this behavior)
         if (!_currentAim && Input.GetKeyDown(payKey))

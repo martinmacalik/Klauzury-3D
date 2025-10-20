@@ -16,12 +16,16 @@ MonoBehaviour:
   - name: Rifle
     prefab: {fileID: 1816555364804008, guid: 88b86b58c0306b64ba04537e9a2eee78, type: 3}
     category: 1
-  - name: Heavy Shotgun
+    icon: {fileID: 21300000, guid: dcb8eae1913d13c40b47e9506db51cc3, type: 3}
+  - name: Shotgun
     prefab: {fileID: 1344660737712290, guid: 805130d4604b93f4d800ca76336cc159, type: 3}
     category: 1
-  - name: Shotgun
+    icon: {fileID: 21300000, guid: 698bf24623e56db44aec1e35afa24513, type: 3}
+  - name: Heavy Shotgun
     prefab: {fileID: 1268879492265518, guid: 16d3964788a0fda47823fa01fca74e19, type: 3}
     category: 1
+    icon: {fileID: 21300000, guid: 81e603a6be7703949a738260f16b7aa9, type: 3}
   - name: Pistol
     prefab: {fileID: 1491283176061640, guid: 6272c12ee766bad489c77e2b199b4c64, type: 3}
     category: 1
+    icon: {fileID: 21300000, guid: 1d5ec20ce68182447b12b88014527821, type: 3}

@@ -1,3 +1,4 @@
+// InventoryDatabase.cs (add the icon field)
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "InventoryDatabase", menuName = "Game/Inventory Database")]
@@ -7,8 +8,9 @@ public class InventoryDatabase : ScriptableObject
     public class Entry
     {
         public string name;
-        public GameObject prefab;
+        public GameObject prefab;          // keep for future 3D use
         public ItemCategory category = ItemCategory.Generic;
+        public Sprite icon;                 // <-- NEW: PNG used in UI
     }
 
     public enum ItemCategory { Generic, Gun }

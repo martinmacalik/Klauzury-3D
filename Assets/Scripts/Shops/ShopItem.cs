@@ -6,6 +6,9 @@ public class ShopItem : MonoBehaviour
     [Header("Item")]
     public string itemName = "Rifle";
     public int price = 500;
+    
+    [Header("UI Icon")]
+    public Sprite iconSprite;
 
     [Header("Highlight Mode")]
     public bool useOverlayMaterial = true;
