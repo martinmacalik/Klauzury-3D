@@ -60,84 +60,60 @@ public class InventoryManager : MonoBehaviour
 
     // --- BUY FLOW: charge, place icons, clear basket ---
     // InventoryManager.cs — DIAGNOSTIC version of PurchaseBasket
-public bool PurchaseBasket(Basket basket)
-{
-    if (!basket) { Debug.LogWarning("[INV] PurchaseBasket: basket == null"); return false; }
-    Debug.Log($"[INV] PurchaseBasket called. Items={basket.items?.Count ?? 0}, Total=${basket.Total}, canPayHere={basket.canPayHere}");
-
-    if (!basket.canPayHere) { Debug.LogWarning("[INV] Not at cashier (basket.canPayHere == false)."); return false; } // CashierZone toggles this
-
-    var menu = PlayerMenuController.Instance;
-    if (!menu) { Debug.LogError("[INV] No PlayerMenuController.Instance found."); return false; }
-
-    int total = basket.Total;
-    Debug.Log($"[INV] Player money={menu.Money}, cost={total}");
-    if (menu.Money < total) { Debug.LogWarning("[INV] Not enough money."); return false; }  // 
-
-    if (basket.items == null || basket.items.Count == 0) { Debug.LogWarning("[INV] Basket empty."); return false; }
-
-    // Dry-run + apply
-    var pending = new List<string>(basket.items.Count);
-    foreach (var it in basket.items)
+    public bool PurchaseBasket(Basket basket)
     {
-        Debug.Log($"[INV] Pending item: '{it.name}' ${it.price}");
-        pending.Add(it.name);
+        if (!basket) { Debug.LogWarning("[INV] PurchaseBasket: basket == null"); return false; }
+        Debug.Log($"[INV] PurchaseBasket called. Items={basket.items?.Count ?? 0}, Total=${basket.Total}, canPayHere={basket.canPayHere}");
+        if (!basket.canPayHere) { Debug.LogWarning("[INV] Not at cashier."); return false; }
+
+        var menu = PlayerMenuController.Instance;
+        if (!menu) { Debug.LogError("[INV] No PlayerMenuController.Instance found."); return false; }
+
+        int total = basket.Total;
+        if (menu.Money < total) { Debug.LogWarning("[INV] Not enough money."); return false; }
+        if (basket.items == null || basket.items.Count == 0) { Debug.LogWarning("[INV] Basket empty."); return false; }
+
+        // Collect names and tentatively place icons
+        var pending = new List<string>(basket.items.Count);
+        foreach (var it in basket.items) { pending.Add(it.name); Debug.Log($"[INV] Pending item: '{it.name}' ${it.price}"); }
+
+        var chosenSlots = new List<IconSlot>(pending.Count);
+        for (int i = 0; i < pending.Count; i++)
+        {
+            string name = pending[i];
+            if (!database || !database.TryGet(name, out var e) || e == null) { Debug.LogError($"[INV] DB lookup failed for '{name}'"); Undo(chosenSlots); return false; }
+            if (!e.icon) { Debug.LogError($"[INV] DB entry '{name}' has NO icon"); Undo(chosenSlots); return false; }
+
+            var slot = (e.category == InventoryDatabase.ItemCategory.Gun) ? FindFirstEmpty(gunSlots) : FindFirstEmpty(miscSlots);
+            if (!slot) { Debug.LogWarning($"[INV] No empty {(e.category==InventoryDatabase.ItemCategory.Gun?"gun":"misc")} slot for '{name}'."); Undo(chosenSlots); return false; }
+
+            slot.SetIcon(e.icon);
+            chosenSlots.Add(slot);
+        }
+
+        // Raise “bought any weapon” + push guns into WeaponInventory (for Backpack grid)
+        bool boughtWeapon = false;
+        var wInv = WeaponInventory.Instance;  // <-- use persistent inventory
+        foreach (var name in pending)
+        {
+            if (database.TryGet(name, out var e) && e.category == InventoryDatabase.ItemCategory.Gun)
+            {
+                boughtWeapon = true;
+                wInv?.AddWeapon(name); // duplicates will be added as separate entries
+            }
+        }
+        if (boughtWeapon) GameEvents.RaiseWeaponPurchased("any");
+
+
+        // Charge & clear
+        Debug.Log($"[INV] Charging ${total} and clearing basket...");
+        menu.AddMoney(-total);
+        basket.Clear();
+        Debug.Log("[INV] Purchase complete.");
+        return true;
+
+        void Undo(List<IconSlot> list) { foreach (var s in list) if (s) s.Clear(); }
     }
 
-    var chosenSlots = new List<IconSlot>(pending.Count);
-
-    for (int i = 0; i < pending.Count; i++)
-    {
-        string name = pending[i];
-        if (!database)
-        {
-            Debug.LogError("[INV] InventoryDatabase is null.");
-            Undo(chosenSlots);
-            return false;
-        }
-
-        if (!database.TryGet(name, out var e) || e == null)
-        {
-            Debug.LogError($"[INV] DB lookup failed for '{name}'. Check spelling/case in InventoryDatabase.");
-            Undo(chosenSlots);
-            return false;
-        }
-        if (!e.icon)
-        {
-            Debug.LogError($"[INV] DB entry for '{name}' has NO icon sprite assigned.");
-            Undo(chosenSlots);
-            return false;
-        }
-
-        var slot = (e.category == InventoryDatabase.ItemCategory.Gun)
-            ? FindFirstEmpty(gunSlots)
-            : FindFirstEmpty(miscSlots);
-
-        Debug.Log($"[INV] Item '{name}' → category={e.category}, slotFound={(slot!=null)}");
-        if (!slot)
-        {
-            Debug.LogWarning($"[INV] No empty {(e.category==InventoryDatabase.ItemCategory.Gun ? "gun" : "misc")} slot for '{name}'.");
-            Undo(chosenSlots);
-            return false;
-        }
-
-        slot.SetIcon(e.icon);   // tentative
-        Debug.Log($"[INV] SetIcon done on slot '{slot.name}'. Sprite={(e.icon ? e.icon.name : "null")}");
-        chosenSlots.Add(slot);
-    }
-
-    // Charge & clear
-    Debug.Log($"[INV] Charging ${total} and clearing basket...");
-    menu.AddMoney(-total);     // clamps >= 0  
-    basket.Clear();            // fires onChanged  
-    Debug.Log("[INV] Purchase complete.");
-    return true;
-
-    void Undo(List<IconSlot> list)
-    {
-        Debug.Log("[INV] Undo placement for previously filled slots.");
-        foreach (var s in list) if (s) s.Clear();
-    }
-}
 
 }

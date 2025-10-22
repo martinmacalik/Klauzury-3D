@@ -96,17 +96,10 @@ public class PlayerShopLook : MonoBehaviour
         // When NOT aiming at an item and pressing payKey, run PNG purchase:
         if (!_currentAim && Input.GetKeyDown(payKey))
         {
-            var inv = InventoryManager.Instance ?? FindObjectOfType<InventoryManager>(true); // includeInactive = true
-            Debug.Log($"[LOOK] Pay pressed. inv={(inv ? inv.name : "null")}, basket={( _basket ? _basket.name : "null")}, canPayHere={_basket?.canPayHere}");
-
-            if (!inv)
-            {
-                Debug.LogError("[LOOK] No InventoryManager found. Add one to the scene (active) and assign slots+database.");
-                return;
-            }
-
-            inv.PurchaseBasket(_basket);
+            var inv = InventoryManager.Instance ?? FindObjectOfType<InventoryManager>(true);
+            if (inv) inv.PurchaseBasket(_basket);
         }
+
 
 
 

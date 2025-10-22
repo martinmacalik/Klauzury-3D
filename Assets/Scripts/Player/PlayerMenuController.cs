@@ -6,7 +6,7 @@ using TMPro;
 // menu.CloseMenu();
 // menu.OpenMenu();
 // menu.ToggleMenu();
-// menu.AddMoney(100);
+//menu.AddMoney(100);
 // menu.AddGems(2);
 // menu.AddKillScore();
 // menu.AddStar();
@@ -141,9 +141,22 @@ public class PlayerMenuController : MonoBehaviour
     {
         money = Mathf.Max(0, money + amount);
         RefreshCounters();
+        GameEvents.RaiseMoneyChanged(money);
     }
-    public void AddGems(int amount)  { Gems  = Mathf.Max(0, Gems  + amount); RefreshCounters(); }
-    public void AddKillScore(int amount = 1) { Kills = Mathf.Max(0, Kills + amount); RefreshCounters(); }
+
+    public void AddGems(int amount)
+    {
+        Gems  = Mathf.Max(0, Gems  + amount); 
+        RefreshCounters();
+        GameEvents.RaiseGemsChanged(Gems);
+    }
+
+    public void AddKillScore(int amount = 1)
+    {
+        Kills = Mathf.Max(0, Kills + amount); 
+        RefreshCounters();
+        GameEvents.RaiseKillsChanged(Kills);
+    }
 
     // Light the next star (colored). Does nothing if already at max.
     public void AddStar() => SetStarLevel(Mathf.Min(StarLevel + 1, totalStars));
