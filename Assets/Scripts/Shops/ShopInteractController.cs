@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Linq;
 
 [DisallowMultipleComponent]
 public class ShopInteractController : MonoBehaviour
@@ -55,10 +56,29 @@ public class ShopInteractController : MonoBehaviour
         {
             if (basket != null)
             {
-                basket.Add(_current.itemName, _current.price);  // updates UI via onChanged, etc. :contentReference[oaicite:0]{index=0}
+                string name = _current.itemName;
+                int price   = _current.price;
+
+                // NEW: disallow adding if already owned
+                var wInv = WeaponInventory.Instance;
+                if (wInv && wInv.CountOf(name) > 0)
+                {
+                    if (tooltip) tooltip.Show(name, price, "Already owned");
+                    return;
+                }
+
+                // NEW: disallow duplicates in the basket
+                bool alreadyInBasket = basket.items != null && basket.items.Any(it => it.name == name);
+                if (alreadyInBasket)
+                {
+                    if (tooltip) tooltip.Show(name, price, "Already in basket");
+                    return;
+                }
+
+                // OK to add
+                basket.Add(name, price);
                 ConsumedInteractThisFrame = true;
-                // Optional mini feedback bump in the tooltip
-                if (tooltip) tooltip.Show(_current.itemName, _current.price, "Added to basket!");
+                if (tooltip) tooltip.Show(name, price, "Added to basket!");
             }
             else
             {
