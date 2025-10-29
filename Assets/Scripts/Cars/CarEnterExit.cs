@@ -66,6 +66,26 @@ public class CarEnterExit : MonoBehaviour
 
         if (!driverState) driverState = GetComponentInParent<CarDriverState>();
 
+        // Auto-find car camera in scene if not assigned
+        if (!carCamera)
+        {
+            // Search all cameras in the scene (including inactive ones)
+            var allCams = FindObjectsOfType<Camera>(true); // true = include inactive
+            foreach (var cam in allCams)
+            {
+                // Skip main camera and player cameras
+                if (cam.CompareTag("MainCamera")) continue;
+                
+                // Look for a camera that's not parented to anything (scene root) or has a specific name
+                // You can customize this check based on your camera's name or tag
+                if (cam.name.Contains("Car") || cam.name.Contains("Vehicle") || cam.transform.parent == null && !cam.CompareTag("MainCamera"))
+                {
+                    carCamera = cam;
+                    break;
+                }
+            }
+        }
+
         // obtain RB for speed checks
         rb = GetComponentInParent<Rigidbody>();
         if (!rb && carController != null)
@@ -74,18 +94,6 @@ public class CarEnterExit : MonoBehaviour
             if (prop != null) rb = prop.GetValue(carController) as Rigidbody;
         }
 
-        if (carCamera) carCamera.gameObject.SetActive(false);
-
-        if (!gun && playerRoot)
-            gun = playerRoot.GetComponentInChildren<SimpleGun>(true);
-
-        // IMPORTANT: make sure idle cars ignore player input
-        if (carController)
-        {
-            carController.SetControlMode(WheelCarController.ControlMode.External);
-            carController.SetExternalInputs(0f, 0f);
-        }
-        
         if (rb)
         {
             originalDrag = rb.linearDamping;
@@ -117,6 +125,27 @@ public class CarEnterExit : MonoBehaviour
 
     void Update()
     {
+        // Auto-find player if not assigned
+        if (!playerRoot)
+        {
+            var playerObj = GameObject.FindGameObjectWithTag("Player");
+            if (playerObj)
+            {
+                playerRoot = playerObj;
+                
+                // Also find gun when we find the player
+                if (!gun)
+                    gun = playerRoot.GetComponentInChildren<SimpleGun>(true);
+            }
+        }
+
+        // IMPORTANT: make sure idle cars ignore player input
+        if (carController && !inCar)
+        {
+            carController.SetControlMode(WheelCarController.ControlMode.External);
+            carController.SetExternalInputs(0f, 0f);
+        }
+
         if (!playerRoot || !carController) return;
 
         // only the active car (or none) can react; must also be physically near THIS car

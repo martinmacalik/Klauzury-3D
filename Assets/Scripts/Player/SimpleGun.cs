@@ -72,6 +72,11 @@ public class SimpleGun : MonoBehaviour
         if (Input.GetMouseButton(0))
             TryFire();
     }
+    
+    public void SetMuzzle(Transform t)
+    {
+        muzzle = t;
+    }
 
     void LerpFOV(bool wantADS)
     {

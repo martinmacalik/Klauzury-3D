@@ -38,35 +38,59 @@ public class CarAIDriver : MonoBehaviour
         car = GetComponent<WheelCarController>();
         rb  = car ? car.RB : GetComponent<Rigidbody>();
 
-        // make a tiny trigger sphere in front of the car
-        var sensorGO = new GameObject("AI_Sensor");
-        sensorGO.transform.SetParent(transform, false);
-        sensorGO.transform.localPosition = new Vector3(0f, bubbleHeight, bubbleForward + brakeEarlyMeters);
-        sensorGO.layer = gameObject.layer;
+        // Initialize waypoints if null to prevent Unity serialization errors
+        if (waypoints == null)
+            waypoints = new Transform[0];
 
-        var sc = sensorGO.AddComponent<SphereCollider>();
-        sc.isTrigger = true;
-        sc.radius = bubbleRadius;
+        // Only create sensor if we have waypoints (AI will actually drive)
+        if (waypoints.Length > 0)
+        {
+            // make a tiny trigger sphere in front of the car
+            var sensorGO = new GameObject("AI_Sensor");
+            sensorGO.transform.SetParent(transform, false);
+            sensorGO.transform.localPosition = new Vector3(0f, bubbleHeight, bubbleForward + brakeEarlyMeters);
+            sensorGO.layer = gameObject.layer;
 
-        var srb = sensorGO.AddComponent<Rigidbody>();
-        srb.isKinematic = true; srb.useGravity = false;
+            var sc = sensorGO.AddComponent<SphereCollider>();
+            sc.isTrigger = true;
+            sc.radius = bubbleRadius;
 
-        sensor = sensorGO.AddComponent<AICarSensor>();
-        sensor.owner = this;
-        sensor.carLayerMask = carLayer;
+            var srb = sensorGO.AddComponent<Rigidbody>();
+            srb.isKinematic = true; srb.useGravity = false;
+
+            sensor = sensorGO.AddComponent<AICarSensor>();
+            sensor.owner = this;
+            sensor.carLayerMask = carLayer;
+        }
     }
 
     void OnEnable()
     {
         if (car) car.SetControlMode(WheelCarController.ControlMode.External);
+        
+        // If no waypoints, park the car immediately
+        if (waypoints == null || waypoints.Length == 0)
+        {
+            if (rb)
+                ParkCar();
+        }
     }
 
     void Update()
     {
-        // nothing to do? -> idle inputs
+        // nothing to do? -> idle inputs and keep parked
         if (car == null || rb == null || waypoints == null || waypoints.Length == 0)
         {
             if (car) car.SetExternalInputs(0f, 0f);
+            if (rb) ParkCar();
+            return;
+        }
+
+        // Validate current waypoint exists
+        if (currentIndex >= waypoints.Length || waypoints[currentIndex] == null)
+        {
+            if (car) car.SetExternalInputs(0f, 0f);
+            if (rb) ParkCar();
             return;
         }
 
@@ -127,6 +151,15 @@ public class CarAIDriver : MonoBehaviour
 
         // drive
         car.SetExternalInputs(throttle, steerCmd);
+    }
+
+    void ParkCar()
+    {
+        if (!rb) return;  // safety check
+        
+        // Ensure the car is not moving
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
     }
 
     float GetApproxBrakeAccel()
