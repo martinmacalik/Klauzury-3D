@@ -8,10 +8,14 @@ public class InventoryPageSwitcher : MonoBehaviour
     [Header("Toggles (UGUI)")]
     public Toggle homeToggle;        // Canvas-based Toggle
     public Toggle backpackToggle;    // Canvas-based Toggle
+    public Toggle miscelaniousBackpackToggle; // New
+    public Toggle infoToggle;                   // New
 
     [Header("Pages (roots)")]
     public GameObject homePageRoot;      // parent of your home layout
     public GameObject backpackPageRoot;  // parent of your backpack layout
+    public GameObject miscelaniousBackpackPageRoot; // New
+    public GameObject infoPageRoot;                 // New
 
     [Header("Layout Rebuild")]
     [Tooltip("Root RectTransform that contains your pages (Grid/Vertical/Horizontal Layout, etc).")]
@@ -22,10 +26,14 @@ public class InventoryPageSwitcher : MonoBehaviour
     [Header("Optional: also drive CanvasGroups for proper raycasts")]
     public bool useCanvasGroups = true;
 
+    enum Page { Home, Backpack, MiscelaniousBackpack, Info }
+
     void Awake()
     {
-        if (homeToggle)     homeToggle.onValueChanged.AddListener(OnHomeToggled);
-        if (backpackToggle) backpackToggle.onValueChanged.AddListener(OnBackpackToggled);
+        if (homeToggle)                  homeToggle.onValueChanged.AddListener(OnHomeToggled);
+        if (backpackToggle)              backpackToggle.onValueChanged.AddListener(OnBackpackToggled);
+        if (miscelaniousBackpackToggle)  miscelaniousBackpackToggle.onValueChanged.AddListener(OnMiscToggled);
+        if (infoToggle)                  infoToggle.onValueChanged.AddListener(OnInfoToggled);
 
         // Initialize based on whichever toggle starts ON.
         ApplyState();
@@ -33,39 +41,66 @@ public class InventoryPageSwitcher : MonoBehaviour
 
     void OnDestroy()
     {
-        if (homeToggle)     homeToggle.onValueChanged.RemoveListener(OnHomeToggled);
-        if (backpackToggle) backpackToggle.onValueChanged.RemoveListener(OnBackpackToggled);
+        if (homeToggle)                  homeToggle.onValueChanged.RemoveListener(OnHomeToggled);
+        if (backpackToggle)              backpackToggle.onValueChanged.RemoveListener(OnBackpackToggled);
+        if (miscelaniousBackpackToggle)  miscelaniousBackpackToggle.onValueChanged.RemoveListener(OnMiscToggled);
+        if (infoToggle)                  infoToggle.onValueChanged.RemoveListener(OnInfoToggled);
     }
 
     void OnHomeToggled(bool on)
     {
-        if (on) ShowPage(home: true);
+        if (on) ShowPage(Page.Home);
     }
 
     void OnBackpackToggled(bool on)
     {
-        if (on) ShowPage(home: false);
+        if (on) ShowPage(Page.Backpack);
+    }
+
+    void OnMiscToggled(bool on)
+    {
+        if (on) ShowPage(Page.MiscelaniousBackpack);
+    }
+
+    void OnInfoToggled(bool on)
+    {
+        if (on) ShowPage(Page.Info);
     }
 
     void ApplyState()
     {
-        bool homeOn = homeToggle && homeToggle.isOn;
-        bool backOn = backpackToggle && backpackToggle.isOn;
+        bool homeOn  = homeToggle && homeToggle.isOn;
+        bool backOn  = backpackToggle && backpackToggle.isOn;
+        bool miscOn  = miscelaniousBackpackToggle && miscelaniousBackpackToggle.isOn;
+        bool infoOn  = infoToggle && infoToggle.isOn;
 
-        // If both off (ToggleGroup allowSwitchOff?), default to Home
-        if (!homeOn && !backOn)
+        // If all off (ToggleGroup allowSwitchOff?), default to Home
+        if (!homeOn && !backOn && !miscOn && !infoOn)
         {
-            homeOn = true;
             if (homeToggle) homeToggle.isOn = true;
+            ShowPage(Page.Home);
+            return;
         }
 
-        ShowPage(home: homeOn);
+        // Pick whichever is currently ON (priority order: Home, Backpack, Misc, Info)
+        if (homeOn) { ShowPage(Page.Home); return; }
+        if (backOn) { ShowPage(Page.Backpack); return; }
+        if (miscOn) { ShowPage(Page.MiscelaniousBackpack); return; }
+        if (infoOn) { ShowPage(Page.Info); return; }
     }
 
+    // Back-compat wrapper used by the original two toggles
     void ShowPage(bool home)
     {
-        SetVisible(homePageRoot,    home);
-        SetVisible(backpackPageRoot,!home);
+        ShowPage(home ? Page.Home : Page.Backpack);
+    }
+
+    void ShowPage(Page page)
+    {
+        SetVisible(homePageRoot,                 page == Page.Home);
+        SetVisible(backpackPageRoot,             page == Page.Backpack);
+        SetVisible(miscelaniousBackpackPageRoot, page == Page.MiscelaniousBackpack);
+        SetVisible(infoPageRoot,                 page == Page.Info);
 
         if (forceRebuild) StartCoroutine(CoForceRebuild());
     }
