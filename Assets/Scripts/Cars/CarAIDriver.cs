@@ -79,20 +79,55 @@ public class CarAIDriver : MonoBehaviour
     void Update()
     {
         // nothing to do? -> idle inputs and keep parked
-        if (car == null || rb == null || waypoints == null || waypoints.Length == 0)
+        if (car == null || rb == null)
         {
             if (car) car.SetExternalInputs(0f, 0f);
             if (rb) ParkCar();
             return;
         }
 
-        // Validate current waypoint exists
-        if (currentIndex >= waypoints.Length || waypoints[currentIndex] == null)
+        // Ensure waypoints array is not null (safety)
+        if (waypoints == null)
+            waypoints = new Transform[0];
+
+        // If no waypoints assigned, park and idle
+        if (waypoints.Length == 0)
         {
             if (car) car.SetExternalInputs(0f, 0f);
             if (rb) ParkCar();
             return;
         }
+
+        // Clamp currentIndex into valid range
+        if (currentIndex < 0) currentIndex = 0;
+        if (currentIndex >= waypoints.Length) currentIndex = 0;
+
+        // Find the next non-null waypoint (search up to waypoints.Length entries)
+        Transform target = null;
+        int foundIndex = -1;
+        for (int i = 0; i < waypoints.Length; i++)
+        {
+            int idx = (currentIndex + i) % waypoints.Length;
+            if (waypoints[idx] != null)
+            {
+                target = waypoints[idx];
+                foundIndex = idx;
+                break;
+            }
+        }
+
+        // If no valid waypoint found, clear waypoints and park
+        if (target == null)
+        {
+            // replace with empty to avoid repeated checks elsewhere
+            waypoints = new Transform[0];
+            if (car) car.SetExternalInputs(0f, 0f);
+            if (rb) ParkCar();
+            return;
+        }
+
+        // make sure currentIndex points to the valid target
+        currentIndex = foundIndex;
 
         // keep sensor in sync if tweaked in inspector at runtime
         if (sensor) sensor.SyncSphere(bubbleRadius, bubbleForward + brakeEarlyMeters, bubbleHeight);
@@ -101,15 +136,35 @@ public class CarAIDriver : MonoBehaviour
         currentSpeed = Vector3.Dot(rb.linearVelocity, transform.forward);
 
         // waypoint switching (flat distance)
-        Transform target = waypoints[currentIndex];
         Vector3 flatPos = new Vector3(transform.position.x, 0f, transform.position.z);
         Vector3 flatTar = new Vector3(target.position.x, 0f, target.position.z);
 
         if (Vector3.Distance(flatPos, flatTar) < waypointSwitchRadius)
         {
-            currentIndex = (currentIndex + 1) % waypoints.Length;
-            target = waypoints[currentIndex];
-            flatTar = new Vector3(target.position.x, 0f, target.position.z);
+            // advance to next valid waypoint
+            int attempts = 0;
+            int next = currentIndex;
+            do
+            {
+                next = (next + 1) % waypoints.Length;
+                attempts++;
+                if (waypoints[next] != null)
+                {
+                    currentIndex = next;
+                    target = waypoints[currentIndex];
+                    flatTar = new Vector3(target.position.x, 0f, target.position.z);
+                    break;
+                }
+            } while (attempts < waypoints.Length);
+
+            // if we couldn't find a valid next target, park and bail out
+            if (target == null || waypoints.Length == 0 || attempts >= waypoints.Length && (waypoints[currentIndex] == null))
+            {
+                waypoints = new Transform[0];
+                if (car) car.SetExternalInputs(0f, 0f);
+                if (rb) ParkCar();
+                return;
+            }
         }
 
         // simple look-ahead toward the current waypoint

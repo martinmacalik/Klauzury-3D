@@ -26,7 +26,10 @@ public class PlayerMovement : MonoBehaviour
     private CharacterController characterController;
     private Vector3 velocity;
     private float rotationX = 0f;
-    private bool canMove = true;
+
+    // NEW: separate toggles
+    [SerializeField] private bool canLook = true;
+    [SerializeField] private bool canMove = true;
     private bool isCrouching = false;
 
     void Start()
@@ -38,41 +41,46 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
-        // If this script or the CharacterController is disabled, bail out
         if (!enabled) return;
         if (characterController == null || !characterController.enabled || !gameObject.activeInHierarchy) return;
-        
-        // --- Look ---
-        if (canMove)
+
+        // --- Look (independent) ---
+        if (canLook)
         {
             rotationX += -Input.GetAxis("Mouse Y") * lookSpeed;
             rotationX = Mathf.Clamp(rotationX, -lookXLimit, lookXLimit);
-            playerCamera.transform.localRotation = Quaternion.Euler(rotationX, 0, 0);
+            if (playerCamera) playerCamera.transform.localRotation = Quaternion.Euler(rotationX, 0, 0);
             transform.rotation *= Quaternion.Euler(0f, Input.GetAxis("Mouse X") * lookSpeed, 0f);
         }
 
-        // --- Crouch input ---
-        if (crouchToggle)
+        // --- Crouch input (treat as movement) ---
+        if (canMove)
         {
-            if (Input.GetKeyDown(crouchKey)) isCrouching = !isCrouching;
-        }
-        else
-        {
-            isCrouching = Input.GetKey(crouchKey);
+            if (crouchToggle)
+            {
+                if (Input.GetKeyDown(crouchKey)) isCrouching = !isCrouching;
+            }
+            else
+            {
+                isCrouching = Input.GetKey(crouchKey);
+            }
         }
 
-        // Height lerp (optional: smooth)
+        // Height lerp
         characterController.height = Mathf.Lerp(characterController.height,
-                                                isCrouching ? crouchHeight : defaultHeight,
-                                                Time.deltaTime * 12f);
+            isCrouching ? crouchHeight : defaultHeight, Time.deltaTime * 12f);
 
         // --- Movement input ---
-        Vector2 input = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
-        input = Vector2.ClampMagnitude(input, 1f); // no faster diagonals
+        Vector2 input = Vector2.zero;
+        if (canMove)
+        {
+            input = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+            input = Vector2.ClampMagnitude(input, 1f);
+        }
 
         Vector3 move = transform.right * input.x + transform.forward * input.y;
 
-        bool isRunning = Input.GetKey(KeyCode.LeftShift) && !isCrouching;
+        bool isRunning = canMove && Input.GetKey(KeyCode.LeftShift) && !isCrouching;
         float targetSpeed = isCrouching ? crouchSpeed : (isRunning ? runSpeed : walkSpeed);
 
         // Horizontal move
@@ -80,14 +88,13 @@ public class PlayerMovement : MonoBehaviour
 
         // Preserve vertical velocity
         float y = velocity.y;
-
         velocity = new Vector3(horizontal.x, y, horizontal.z);
 
-        // Jump
+        // Jump (blocked when movement is disabled)
         if (characterController.isGrounded)
         {
             if (velocity.y < 0f) velocity.y = -2f; // stick to ground
-            if (Input.GetButtonDown("Jump") && canMove && !isCrouching)
+            if (canMove && Input.GetButtonDown("Jump") && !isCrouching)
             {
                 velocity.y = jumpPower;
             }
@@ -96,7 +103,24 @@ public class PlayerMovement : MonoBehaviour
         // Gravity
         velocity.y -= gravity * Time.deltaTime;
 
-        // Move character
+        // Apply
         characterController.Move(velocity * Time.deltaTime);
     }
+
+    // === Public controls for external scripts ===
+    public void SetMovementEnabled(bool enabled)
+    {
+        canMove = enabled;
+        if (!canMove)
+        {
+            // stop horizontal instantly, keep vertical so gravity works
+            velocity = new Vector3(0f, velocity.y, 0f);
+            isCrouching = false;
+        }
+    }
+
+    public void SetLookEnabled(bool enabled) => canLook = enabled;
+
+    public bool IsMovementEnabled => canMove;
+    public bool IsLookEnabled => canLook;
 }
