@@ -32,12 +32,21 @@ public class EquipConfirmPopup : MonoBehaviour
     }
 
     // hook these to the prefab’s Yes/No buttons
-    public void OnClickYes()
+    public bool useMiscSlot = false;  // default = false (weapon)
+
+    void OnClickYes()
     {
-        if (_equipment && !string.IsNullOrEmpty(_pendingWeapon))
-            _equipment.Equip(_pendingWeapon);
+        if (string.IsNullOrEmpty(_pendingWeapon) || _equipment == null) { Hide(); return; }
+
+        if (useMiscSlot)
+            _equipment.EquipMisc(_pendingWeapon);   // NEW: equip the misc slot
+        else
+            _equipment.Equip(_pendingWeapon);       // existing weapon path
+
         Hide();
+        useMiscSlot = false; // reset so future popups default back to weapon
     }
+
 
     public void OnClickNo() => Hide();
 

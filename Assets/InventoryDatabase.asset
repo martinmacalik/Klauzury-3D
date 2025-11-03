@@ -29,3 +29,7 @@ MonoBehaviour:
     prefab: {fileID: 1491283176061640, guid: 6272c12ee766bad489c77e2b199b4c64, type: 3}
     category: 1
     icon: {fileID: 21300000, guid: 1d5ec20ce68182447b12b88014527821, type: 3}
+  - name: TestBottle
+    prefab: {fileID: 1008148459309804, guid: 1e86b2134dffc1c4fa8a7c20e02f599c, type: 3}
+    category: 0
+    icon: {fileID: 21300000, guid: 66b48abc370dff84caa64ad217af3103, type: 3}

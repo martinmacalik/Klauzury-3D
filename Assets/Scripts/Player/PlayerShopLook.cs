@@ -103,11 +103,11 @@ public class PlayerShopLook : MonoBehaviour
 
 
 
-        // 2) Pay when NOT aiming at an item (if you kept this behavior)
-        if (!_currentAim && Input.GetKeyDown(payKey))
-        {
-            _basket.TryPayUsingMenuMoney();
-        }
+        // // 2) Pay when NOT aiming at an item (if you kept this behavior)
+        // if (!_currentAim && Input.GetKeyDown(payKey))
+        // {
+        //     _basket.TryPayUsingMenuMoney();
+        // }
     }
 
 

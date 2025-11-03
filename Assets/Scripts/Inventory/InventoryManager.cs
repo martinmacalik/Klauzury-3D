@@ -108,56 +108,88 @@ public class InventoryManager : MonoBehaviour
         var chosenSlots = new List<IconSlot>(pending.Count);
         for (int i = 0; i < pending.Count; i++)
         {
-            string name = pending[i];
-            if (!database || !database.TryGet(name, out var e) || e == null)
+            string itemName = pending[i];
+            if (!database || !database.TryGet(itemName, out var e) || e == null)
             {
-                Debug.LogError($"[INV] DB lookup failed for '{name}'");
+                Debug.LogError($"[INV] DB lookup failed for '{itemName}'");
                 Undo(chosenSlots);
                 return false;
             }
 
             if (!e.icon)
             {
-                Debug.LogError($"[INV] DB entry '{name}' has NO icon");
+                Debug.LogError($"[INV] DB entry '{itemName}' has NO icon");
                 Undo(chosenSlots);
                 return false;
             }
 
-            // NEW: Skip slot placement for guns (they go to Backpack only)
+            // Determine which slot array to use based on category
+            IconSlot slot;
             if (e.category == InventoryDatabase.ItemCategory.Gun)
-                continue;
-
-            var slot = FindFirstEmpty(miscSlots);
-            if (!slot)
             {
-                Debug.LogWarning($"[INV] No empty misc slot for '{name}'.");
-                Undo(chosenSlots);
-                return false;
+                slot = FindFirstEmpty(gunSlots);
+                if (!slot)
+                {
+                    Debug.LogWarning($"[INV] No empty gun slot for '{itemName}' — continuing (backpack will still get it).");
+                }
+                else
+                {
+                    slot.SetIcon(e.icon);
+                    chosenSlots.Add(slot);
+                }
             }
-
-            slot.SetIcon(e.icon);
-            chosenSlots.Add(slot);
+            else
+            {
+                slot = FindFirstEmpty(miscSlots);
+                if (!slot)
+                {
+                    Debug.LogWarning($"[INV] No empty misc slot for '{itemName}' — continuing (backpack will still get it).");
+                }
+                else
+                {
+                    slot.SetIcon(e.icon);
+                    chosenSlots.Add(slot);
+                }
+            }
         }
 
-// Push ALL purchased guns into WeaponInventory (Backpack)
+// Push guns to WeaponInventory (already in your file)
         bool boughtWeapon = false;
         var wInv = WeaponInventory.Instance;
-        foreach (var name in pending)
+        foreach (var itemName in pending)
         {
-            if (database.TryGet(name, out var e) && e.category == InventoryDatabase.ItemCategory.Gun)
+            if (database.TryGet(itemName, out var e) && e.category == InventoryDatabase.ItemCategory.Gun)
             {
                 boughtWeapon = true;
-                wInv?.AddWeapon(name); // duplicates allowed
+                wInv?.AddWeapon(itemName);
+            }
+        }
+
+// NEW: push NON-guns to MiscInventory
+        var mInv = MiscInventory.Instance;
+        if (mInv == null)
+        {
+            Debug.LogError("[INV] MiscInventory.Instance is null — add a MiscInventory component to the scene.");
+        }
+        else
+        {
+            foreach (var itemName in pending)
+            {
+                if (database.TryGet(itemName, out var e) && e.category != InventoryDatabase.ItemCategory.Gun)
+                {
+                    Debug.Log($"[INV] Adding '{itemName}' to MiscInventory");
+                    mInv.AddItem(itemName, 1);
+                }
             }
         }
 
         if (boughtWeapon) GameEvents.RaiseWeaponPurchased("any");
 
-// Charge & clear (unchanged)
+// Charge & clear (keep your existing code)
         Debug.Log($"[INV] Charging ${total} and clearing basket.");
         menu.AddMoney(-total);
         basket.Clear();
-        Debug.Log("[INV] Purchase complete.");
+        Debug.Log("[INV] Purchase complete."); 
         return true;
 
         void Undo(List<IconSlot> list)
