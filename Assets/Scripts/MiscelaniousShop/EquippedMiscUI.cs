@@ -22,7 +22,14 @@ public class EquippedMiscUI : MonoBehaviour
 
     private void Refresh(string miscName)
     {
-        if (string.IsNullOrEmpty(miscName) || !database.TryGet(miscName, out var entry))
+        // Safety check - ensure iconImage is assigned
+        if (!iconImage)
+        {
+            Debug.LogError("[EquippedMiscUI] iconImage is not assigned in the Inspector!");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(miscName) || !database || !database.TryGet(miscName, out var entry))
         {
             iconImage.sprite = emptySprite;
             iconImage.color = emptyColor;

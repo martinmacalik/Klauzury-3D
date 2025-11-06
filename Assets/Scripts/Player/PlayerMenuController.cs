@@ -53,6 +53,11 @@ public class PlayerMenuController : MonoBehaviour
     [SerializeField] private bool normalizeScaleOnOpen = true;
     [SerializeField] private bool disableAnimators = false;     // default OFF
 
+    // New toggles: roots that should be hidden while the menu is open
+    [Header("Extra UI roots to hide while menu is open")]
+    [SerializeField] private GameObject miscellaneousBackpackRoot;
+    [SerializeField] private GameObject infoRoot;
+
     private Vector3 _originalScale;
     private CursorLockMode _prevLock;
     private bool _prevVisible;
@@ -258,6 +263,12 @@ public class PlayerMenuController : MonoBehaviour
             for (int i = 0; i < hideWhileMenuOpen.Length; i++)
                 if (hideWhileMenuOpen[i]) hideWhileMenuOpen[i].SetActive(showInGameUI);
         }
+
+        // Also handle the two new explicit roots (if assigned)
+        if (miscellaneousBackpackRoot != null)
+            miscellaneousBackpackRoot.SetActive(!visible);
+        if (infoRoot != null)
+            infoRoot.SetActive(!visible);
 
         if (pauseOnOpen) Time.timeScale = visible ? 0f : 1f;
     }

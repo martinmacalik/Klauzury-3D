@@ -15,10 +15,29 @@ public class MiscSlotUI : MonoBehaviour
 
     private string _name;
 
+    void Awake()
+    {
+        // Auto-find iconSlot if not assigned
+        if (!iconSlot) iconSlot = GetComponentInChildren<IconSlot>(true);
+        if (!iconSlot) Debug.LogError($"[MiscSlotUI:{name}] IconSlot component not found!");
+    }
+
     public void Setup(string itemName, Sprite icon, Action<string> onClicked)
     {
         _name = itemName;
-        if (iconSlot) iconSlot.SetIcon(icon);
+        
+        Debug.Log($"[MiscSlotUI:{name}] Setup called: itemName='{itemName}', icon={(icon ? icon.name : "NULL")}, iconSlot={(iconSlot ? "assigned" : "NULL")}");
+        
+        if (iconSlot)
+        {
+            iconSlot.SetIcon(icon);
+            Debug.Log($"[MiscSlotUI:{name}] After SetIcon, iconSlot.IsEmpty={iconSlot.IsEmpty}");
+        }
+        else
+        {
+            Debug.LogError($"[MiscSlotUI:{name}] iconSlot is NULL - cannot set icon!");
+        }
+        
         if (background) background.color = normalBg;
         if (button)
         {

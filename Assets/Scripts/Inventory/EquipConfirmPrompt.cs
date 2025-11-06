@@ -4,6 +4,8 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class EquipConfirmPopup : MonoBehaviour
 {
+    public static EquipConfirmPopup SharedInstance { get; private set; }
+
     public CanvasGroup group; // optional
 
     string _pendingWeapon;
@@ -12,7 +14,25 @@ public class EquipConfirmPopup : MonoBehaviour
     void Awake()
     {
         if (!group) group = GetComponent<CanvasGroup>();
+        
+        // Don't destroy this popup when switching scenes
+        if (SharedInstance == null)
+        {
+            SharedInstance = this;
+            DontDestroyOnLoad(gameObject);
+        }
+        else if (SharedInstance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        
         Hide();
+    }
+
+    void OnDestroy()
+    {
+        if (SharedInstance == this) SharedInstance = null;
     }
 
     // called by the grid
@@ -28,27 +48,52 @@ public class EquipConfirmPopup : MonoBehaviour
             group.blocksRaycasts = true;
         }
         gameObject.SetActive(true);
-        transform.SetAsLastSibling();
+        transform.SetAsLastSibling(); // Move to end of parent's children list
+        
+        // Ensure consistent scale
+        var rectTransform = transform as RectTransform;
+        if (rectTransform)
+        {
+            rectTransform.localScale = Vector3.one;
+        }
+        
+        // Extra safety: ensure Canvas sorting is still on top
+        var canvas = GetComponent<Canvas>();
+        if (canvas)
+        {
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = 9999;
+            Debug.Log($"[EquipConfirmPopup] Showing '{weaponName}' with sortingOrder={canvas.sortingOrder}, scale={rectTransform?.localScale}");
+        }
+        else
+        {
+            Debug.LogWarning($"[EquipConfirmPopup] No Canvas component found! Popup may render behind other UI.");
+        }
     }
 
-    // hook these to the prefab’s Yes/No buttons
-    public bool useMiscSlot = false;  // default = false (weapon)
+    // hook these to the prefab's Yes/No buttons - MUST BE PUBLIC
+    public bool useMiscSlot;
 
-    void OnClickYes()
+    public void OnClickYes()
     {
+        Debug.Log($"[EquipConfirmPopup] OnClickYes called for '{_pendingWeapon}', useMiscSlot={useMiscSlot}");
+        
         if (string.IsNullOrEmpty(_pendingWeapon) || _equipment == null) { Hide(); return; }
 
         if (useMiscSlot)
-            _equipment.EquipMisc(_pendingWeapon);   // NEW: equip the misc slot
+            _equipment.EquipMisc(_pendingWeapon);
         else
-            _equipment.Equip(_pendingWeapon);       // existing weapon path
+            _equipment.Equip(_pendingWeapon);
 
         Hide();
-        useMiscSlot = false; // reset so future popups default back to weapon
+        useMiscSlot = false;
     }
 
-
-    public void OnClickNo() => Hide();
+    public void OnClickNo()
+    {
+        Debug.Log("[EquipConfirmPopup] OnClickNo called");
+        Hide();
+    }
 
     void Hide()
     {

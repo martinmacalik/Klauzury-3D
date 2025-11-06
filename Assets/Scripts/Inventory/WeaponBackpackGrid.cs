@@ -96,72 +96,86 @@ public class WeaponBackpackGrid : MonoBehaviour
         var popup = GetConfirm();
         if (popup == null) return;
 
+        popup.useMiscSlot = false; // Ensure it's set to weapon mode
         popup.ShowFor(slot.weaponName, equipment); // popup handles Yes/No + equip
     }
 
     EquipConfirmPopup GetConfirm()
-{
-    if (_confirmInstance) return _confirmInstance;
-
-    if (!confirmPrefab)
     {
-        Debug.LogError("[Backpack] confirmPrefab not assigned.");
-        return null;
+        // Use shared instance if it exists
+        if (EquipConfirmPopup.SharedInstance != null)
+        {
+            return EquipConfirmPopup.SharedInstance;
+        }
+
+        // Otherwise create it once
+        if (_confirmInstance) return _confirmInstance;
+
+        if (!confirmPrefab)
+        {
+            Debug.LogError("[Backpack] confirmPrefab not assigned.");
+            return null;
+        }
+
+        // 1) Always parent under a top-level Overlay canvas (outside any masks)
+        var overlay = EnsureOverlayCanvas(); // creates one if missing (see method below)
+
+        // 2) Instantiate under that overlay
+        _confirmInstance = Instantiate(confirmPrefab, overlay.transform);
+        _confirmInstance.name = "EquipConfirmPopup (Shared)";
+
+        // 3) Give the popup its own Canvas that sorts ABOVE everything
+        var selfCanvas = _confirmInstance.GetComponent<Canvas>();
+        if (!selfCanvas) selfCanvas = _confirmInstance.gameObject.AddComponent<Canvas>();
+        selfCanvas.overrideSorting = true;
+        selfCanvas.sortingOrder = 9999; // Very high value to ensure it's always on top
+
+        // Important for input:
+        if (!_confirmInstance.GetComponent<GraphicRaycaster>())
+            _confirmInstance.gameObject.AddComponent<GraphicRaycaster>();
+
+        // Ensure scale is 1
+        var rt = _confirmInstance.transform as RectTransform;
+        if (rt) rt.localScale = Vector3.one;
+
+        // Bring to top inside overlay
+        _confirmInstance.transform.SetAsLastSibling();
+
+        Debug.Log($"[WeaponBackpackGrid] Created shared popup with sortingOrder={selfCanvas.sortingOrder}");
+
+        return _confirmInstance;
     }
 
-    // 1) Always parent under a top-level Overlay canvas (outside any masks)
-    var overlay = EnsureOverlayCanvas(); // creates one if missing (see method below)
-
-    // 2) Instantiate under that overlay
-    _confirmInstance = Instantiate(confirmPrefab, overlay.transform);
-    _confirmInstance.name = "EquipConfirmPopup (Instance)";
-
-    // 3) Give the popup its own Canvas that sorts ABOVE everything
-    var selfCanvas = _confirmInstance.GetComponent<Canvas>();
-    if (!selfCanvas) selfCanvas = _confirmInstance.gameObject.AddComponent<Canvas>();
-    selfCanvas.overrideSorting = true;
-    selfCanvas.sortingOrder = overlay.sortingOrder + 100; // on top of overlay
-
-    // Important for input:
-    if (!_confirmInstance.GetComponent<GraphicRaycaster>())
-        _confirmInstance.gameObject.AddComponent<GraphicRaycaster>();
-
-    // Bring to top inside overlay
-    _confirmInstance.transform.SetAsLastSibling();
-
-    return _confirmInstance;
-}
-
-// Same helper you can keep in this class:
-static Canvas EnsureOverlayCanvas()
-{
-    // Try to find an existing top-level ScreenSpaceOverlay canvas
-    var canvases = Object.FindObjectsOfType<Canvas>();
-    for (int i = 0; i < canvases.Length; i++)
+    // Same helper you can keep in this class:
+    static Canvas EnsureOverlayCanvas()
     {
-        var c = canvases[i];
-        if (!c) continue;
-        if (c.isRootCanvas && c.renderMode == RenderMode.ScreenSpaceOverlay)
-            return c;
+        // Try to find an existing top-level ScreenSpaceOverlay canvas
+        var canvases = Object.FindObjectsOfType<Canvas>();
+        for (int i = 0; i < canvases.Length; i++)
+        {
+            var c = canvases[i];
+            if (!c) continue;
+            if (c.isRootCanvas && c.renderMode == RenderMode.ScreenSpaceOverlay)
+                return c;
+        }
+
+        // Create one if none
+        var go = new GameObject("UI Overlay Canvas",
+            typeof(Canvas),
+            typeof(CanvasScaler),
+            typeof(GraphicRaycaster));
+
+        var canvas = go.GetComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 5000; // very high
+
+        var scaler = go.GetComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920, 1080);
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+        scaler.matchWidthOrHeight = 0.5f;
+
+        return canvas;
     }
-
-    // Create one if none
-    var go = new GameObject("UI Overlay Canvas",
-        typeof(Canvas),
-        typeof(CanvasScaler),
-        typeof(GraphicRaycaster));
-
-    var canvas = go.GetComponent<Canvas>();
-    canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-    canvas.sortingOrder = 5000; // very high
-
-    var scaler = go.GetComponent<CanvasScaler>();
-    scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-    scaler.referenceResolution = new Vector2(1920, 1080);
-    scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-    scaler.matchWidthOrHeight = 0.5f;
-
-    return canvas;
-}
 
 }

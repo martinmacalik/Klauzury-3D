@@ -12,10 +12,12 @@ public class MiscBackpackGrid : MonoBehaviour
     [Header("UI")]
     public Transform gridRoot;
     public MiscSlotUI slotPrefab;
-    public EquipConfirmPopup confirmPrefab; // reuse your existing popup
+    public EquipConfirmPopup confirmPrefab; // for regular misc items
+    public MiscQuestPopup questPopupPrefab; // for quest items
 
     private readonly List<MiscSlotUI> _slots = new();
     private EquipConfirmPopup _confirm;
+    private MiscQuestPopup _questPopup;
 
     void OnEnable()
     {
@@ -36,9 +38,18 @@ public class MiscBackpackGrid : MonoBehaviour
         foreach (Transform c in gridRoot) Destroy(c.gameObject);
         _slots.Clear();
 
+        Debug.Log($"[MiscBackpackGrid] Rebuilding with {miscInventory.Owned.Count} items");
+
         foreach (var name in miscInventory.Owned)
         {
-            if (!database.TryGet(name, out var entry)) continue;
+            if (!database.TryGet(name, out var entry))
+            {
+                Debug.LogWarning($"[MiscBackpackGrid] Item '{name}' not found in database!");
+                continue;
+            }
+            
+            Debug.Log($"[MiscBackpackGrid] Creating slot for '{name}', icon={(entry.icon ? entry.icon.name : "NULL")}");
+            
             var slot = Instantiate(slotPrefab, gridRoot);
             slot.Setup(name, entry.icon, OnSlotClicked);
             _slots.Add(slot);
@@ -48,13 +59,44 @@ public class MiscBackpackGrid : MonoBehaviour
 
     private void OnSlotClicked(string itemName)
     {
-        if (_confirm == null)
+        // Always use the MiscQuestPopup (it handles both quest and non-quest items)
+        if (_questPopup == null)
         {
-            _confirm = Instantiate(confirmPrefab);
-            EnsureOverlayCanvas(_confirm.transform);
+            if (MiscQuestPopup.SharedInstance != null)
+            {
+                _questPopup = MiscQuestPopup.SharedInstance;
+            }
+            else if (questPopupPrefab != null)
+            {
+                var overlay = EnsureOverlayCanvas();
+                _questPopup = Instantiate(questPopupPrefab, overlay.transform);
+                _questPopup.name = "MiscQuestPopup (Shared)";
+                
+                // Add Canvas component with high sorting order
+                var selfCanvas = _questPopup.GetComponent<Canvas>();
+                if (!selfCanvas) selfCanvas = _questPopup.gameObject.AddComponent<Canvas>();
+                selfCanvas.overrideSorting = true;
+                selfCanvas.sortingOrder = 9999;
+                
+                if (!_questPopup.GetComponent<GraphicRaycaster>())
+                    _questPopup.gameObject.AddComponent<GraphicRaycaster>();
+                
+                // Ensure scale is 1
+                var rt = _questPopup.transform as RectTransform;
+                if (rt) rt.localScale = Vector3.one;
+                    
+                _questPopup.transform.SetAsLastSibling();
+                
+                Debug.Log($"[MiscBackpackGrid] Created quest popup with sortingOrder={selfCanvas.sortingOrder}");
+            }
+            else
+            {
+                Debug.LogError("[MiscBackpackGrid] questPopupPrefab not assigned!");
+                return;
+            }
         }
-        _confirm.useMiscSlot = true;             // <-- add this line (see popup change below)
-        _confirm.ShowFor(itemName, equipment);   // pass the EquipmentController, not a method
+        
+        _questPopup.ShowFor(itemName, equipment);
     }
     
     private void OnConfirmEquip(string itemName)
@@ -72,18 +114,33 @@ public class MiscBackpackGrid : MonoBehaviour
 
     private string GetSlotName(MiscSlotUI slot) => slot ? slot.name.Replace("(Clone)", "").Trim() : "";
 
-    private void EnsureOverlayCanvas(Transform t)
+    private Canvas EnsureOverlayCanvas()
     {
-        var canvas = FindAnyObjectByType<Canvas>();
-        Canvas overlay = null;
-        foreach (var c in FindObjectsByType<Canvas>(FindObjectsInactive.Include, FindObjectsSortMode.None))
-            if (c.renderMode == RenderMode.ScreenSpaceOverlay) { overlay = c; break; }
-        if (!overlay)
+        // Try to find an existing top-level ScreenSpaceOverlay canvas
+        var canvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+        foreach (var c in canvases)
         {
-            var go = new GameObject("OverlayCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-            overlay = go.GetComponent<Canvas>();
-            overlay.renderMode = RenderMode.ScreenSpaceOverlay;
+            if (!c) continue;
+            if (c.isRootCanvas && c.renderMode == RenderMode.ScreenSpaceOverlay)
+                return c;
         }
-        t.SetParent(overlay.transform, false);
+
+        // Create one if none
+        var go = new GameObject("UI Overlay Canvas",
+            typeof(Canvas),
+            typeof(CanvasScaler),
+            typeof(GraphicRaycaster));
+
+        var canvas = go.GetComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 5000;
+
+        var scaler = go.GetComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920, 1080);
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+        scaler.matchWidthOrHeight = 0.5f;
+
+        return canvas;
     }
 }

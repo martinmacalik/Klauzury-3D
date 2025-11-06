@@ -29,7 +29,17 @@ public class IconSlot : MonoBehaviour
 
         if (iconImage) iconImage.preserveAspect = preserveAspect;
         EnsureCenteredAnchors();
-        SetEmptyVisual();
+        // Don't call SetEmptyVisual() here - let the caller control when to set the icon
+        // SetEmptyVisual(); // REMOVED - this was overwriting icons set immediately after instantiation
+    }
+
+    void Start()
+    {
+        // Only set empty if no icon has been assigned yet
+        if (!_filled && iconImage && iconImage.sprite == null)
+        {
+            SetEmptyVisual();
+        }
     }
 
     public bool IsEmpty => !_filled;

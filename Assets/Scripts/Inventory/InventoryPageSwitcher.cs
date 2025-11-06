@@ -20,11 +20,15 @@ public class InventoryPageSwitcher : MonoBehaviour
     [Header("Layout Rebuild")]
     [Tooltip("Root RectTransform that contains your pages (Grid/Vertical/Horizontal Layout, etc).")]
     public RectTransform layoutRoot;
-    [Tooltip("Force rebuild when switching pages. Fixes most ‘layout not updating’ issues.")]
+    [Tooltip("Force rebuild when switching pages. Fixes most 'layout not updating' issues.")]
     public bool forceRebuild = true;
 
     [Header("Optional: also drive CanvasGroups for proper raycasts")]
     public bool useCanvasGroups = true;
+
+    [Header("Auto-Reset to Home")]
+    [Tooltip("Always reset to Home page when the inventory/menu opens.")]
+    public bool resetToHomeOnOpen = true;
 
     enum Page { Home, Backpack, MiscelaniousBackpack, Info }
 
@@ -37,6 +41,15 @@ public class InventoryPageSwitcher : MonoBehaviour
 
         // Initialize based on whichever toggle starts ON.
         ApplyState();
+    }
+
+    void OnEnable()
+    {
+        // Reset to Home page every time the menu/inventory becomes active
+        if (resetToHomeOnOpen)
+        {
+            ResetToHome();
+        }
     }
 
     void OnDestroy()
@@ -77,8 +90,7 @@ public class InventoryPageSwitcher : MonoBehaviour
         // If all off (ToggleGroup allowSwitchOff?), default to Home
         if (!homeOn && !backOn && !miscOn && !infoOn)
         {
-            if (homeToggle) homeToggle.isOn = true;
-            ShowPage(Page.Home);
+            ResetToHome();
             return;
         }
 
@@ -87,6 +99,22 @@ public class InventoryPageSwitcher : MonoBehaviour
         if (backOn) { ShowPage(Page.Backpack); return; }
         if (miscOn) { ShowPage(Page.MiscelaniousBackpack); return; }
         if (infoOn) { ShowPage(Page.Info); return; }
+    }
+
+    /// <summary>
+    /// Force the Home toggle on and show Home page
+    /// </summary>
+    public void ResetToHome()
+    {
+        if (homeToggle && !homeToggle.isOn)
+        {
+            homeToggle.isOn = true; // This will trigger OnHomeToggled
+        }
+        else
+        {
+            // If toggle is already on, just show the page directly
+            ShowPage(Page.Home);
+        }
     }
 
     // Back-compat wrapper used by the original two toggles

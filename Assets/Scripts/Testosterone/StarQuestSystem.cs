@@ -11,6 +11,7 @@ public class StarQuestSystem : MonoBehaviour
         ReachMoney,          // complete when Money >= target
         ReachGems,           // complete when Gems >= target
         TestosteronePercent, // complete when Testosterone normalized*100 >= target
+        FindMiscItem,        // complete when a specific misc item is found
     }
 
     [Serializable]
@@ -19,6 +20,7 @@ public class StarQuestSystem : MonoBehaviour
         public string name = "Buy a weapon";
         public QuestType type = QuestType.BuyAnyWeapon;
         public int target = 1;           // threshold for progress-based quests
+        public string miscItemName = ""; // for FindMiscItem type quests
         [NonSerialized] public bool completed;
     }
 
@@ -29,6 +31,7 @@ public class StarQuestSystem : MonoBehaviour
         new Quest { name = "Have $500",      type = QuestType.ReachMoney, target = 500 },
         new Quest { name = "Own 5 gems",     type = QuestType.ReachGems,  target = 5 },
         new Quest { name = "T at 80%",       type = QuestType.TestosteronePercent, target = 80 },
+        new Quest { name = "Find the bottle", type = QuestType.FindMiscItem, miscItemName = "TestBottle" },
     };
 
     [Header("Wiring")]
@@ -46,6 +49,7 @@ public class StarQuestSystem : MonoBehaviour
         GameEvents.OnKillsChanged    += HandleKillsChanged;
         GameEvents.OnMoneyChanged    += HandleMoneyChanged;
         GameEvents.OnGemsChanged     += HandleGemsChanged;
+        GameEvents.OnMiscQuestItemFound += HandleMiscQuestItemFound;
 
         // Optional: live testosterone
         var T = TestosteroneSystem.Instance; // your existing system :contentReference[oaicite:2]{index=2}
@@ -64,6 +68,7 @@ public class StarQuestSystem : MonoBehaviour
         GameEvents.OnKillsChanged    -= HandleKillsChanged;
         GameEvents.OnMoneyChanged    -= HandleMoneyChanged;
         GameEvents.OnGemsChanged     -= HandleGemsChanged;
+        GameEvents.OnMiscQuestItemFound -= HandleMiscQuestItemFound;
 
         var T = TestosteroneSystem.Instance;
         if (T != null) T.OnValueChanged.RemoveListener(OnTestosteroneChanged);
@@ -90,6 +95,12 @@ public class StarQuestSystem : MonoBehaviour
     {
         int pct = Mathf.RoundToInt(normalized * 100f);
         CompleteAllWhere(q => q.type == QuestType.TestosteronePercent && pct >= q.target);
+    }
+    void HandleMiscQuestItemFound(string itemName)
+    {
+        Debug.Log($"[StarQuestSystem] Misc quest item found: '{itemName}'");
+        CompleteAllWhere(q => q.type == QuestType.FindMiscItem && 
+                             string.Equals(q.miscItemName, itemName, StringComparison.OrdinalIgnoreCase));
     }
 
     // ----- Helpers -----
