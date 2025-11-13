@@ -15,8 +15,8 @@ public class StarAffectsTestosterone : MonoBehaviour
     [Range(0.5f, 1f)] public float decayMultiplierPerStar = 0.9f;
 
     [Header("Base Values (auto-read where possible)")]
-    [Tooltip("If TestosteroneSystem doesn’t expose a getter, set this to match its initial Decay/sec in the Inspector.")]
-    public float baseDecayPerSecond = 2f;   // fallback if we can’t read from system
+    [Tooltip("If TestosteroneSystem doesn't expose a getter, set this to match its initial Decay/sec in the Inspector.")]
+    public float baseDecayPerSecond = 0.5f;   // fallback if we can't read from system
     private float baseMax;
 
     private int _lastAppliedStars = -1;

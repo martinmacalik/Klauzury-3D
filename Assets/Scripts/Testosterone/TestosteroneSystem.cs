@@ -9,7 +9,7 @@ public class TestosteroneSystem : MonoBehaviour
     [Header("Tuning")]
     [SerializeField] private float maxValue = 100f;
     [SerializeField] private float startValue = 60f;
-    [SerializeField] private float decayPerSecond = 2f;
+    [SerializeField] private float decayPerSecond = 0.5f;
 
     [Header("Events")]
     public UnityEvent OnDepleted;
@@ -34,8 +34,18 @@ public class TestosteroneSystem : MonoBehaviour
         OnValueChanged?.Invoke(Normalized);
     }
 
+    void OnDestroy()
+    {
+        if (Instance == this)
+            Instance = null;
+    }
+
     void Update()
     {
+        // Don't decay testosterone if player is in a car
+        if (IsPlayerInCar())
+            return;
+
         if (Current <= 0f) return;
 
         float old = Current;
@@ -76,5 +86,12 @@ public class TestosteroneSystem : MonoBehaviour
     {
         Current = Mathf.Clamp(startValue, 0f, maxValue);
         OnValueChanged?.Invoke(Normalized);
+    }
+
+    private bool IsPlayerInCar()
+    {
+        // Check if there's an active car (player is driving)
+        // CarEnterExit.Active is set when player enters a car
+        return CarEnterExit.Active != null;
     }
 }

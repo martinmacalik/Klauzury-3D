@@ -108,7 +108,10 @@ public class SimpleTrafficLightController : MonoBehaviour
         }
 
         // -------- MIXED JUNCTION (STOP + TL) --------
-        if (atIdx == currentIndex) return false; // green for this approach -> go
+        if (atIdx == currentIndex)
+        {
+            return false; // green for this approach -> go
+        }
 
         bool isStopLeg = (stopOnly != null && atIdx < stopOnly.Length) ? stopOnly[atIdx] : false;
 
@@ -116,7 +119,8 @@ public class SimpleTrafficLightController : MonoBehaviour
         {
             // Normal traffic-light leg → obey red with a bit of stopping-distance leniency
             float stoppingDistance = (currentSpeed * currentSpeed) / (2f * Mathf.Max(0.01f, brakeAccel)) + 1f;
-            return bestDist <= Mathf.Max(stopRadius, stoppingDistance);
+            bool shouldStop = bestDist <= Mathf.Max(stopRadius, stoppingDistance);
+            return shouldStop;
         }
         else
         {
@@ -124,13 +128,20 @@ public class SimpleTrafficLightController : MonoBehaviour
             // 1) If the GREEN is occupied now OR within grace → STOP.
             bool greenOccupiedNow   = IsValidIndex(currentIndex) && IsApproachOccupied(currentIndex, carTransform);
             bool withinGraceWindow  = (Time.time - lastGreenOccupiedTime) <= graceAfterGreenClear;
+            
             if (greenOccupiedNow || withinGraceWindow)
+            {
                 return true;
+            }
 
             // 2) If multiple approaches are present now → cycle arbitrates.
             int occupied = CountOccupiedApproaches(carTransform);
+            
             if (occupied >= 2)
-                return atIdx != currentIndex;
+            {
+                bool shouldStop = atIdx != currentIndex;
+                return shouldStop;
+            }
 
             // 3) Otherwise you're alone → go.
             return false;

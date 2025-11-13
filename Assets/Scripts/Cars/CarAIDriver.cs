@@ -30,7 +30,7 @@ public class CarAIDriver : MonoBehaviour
     WheelCarController car;
     Rigidbody rb;
     AICarSensor sensor;
-    float currentSpeed;
+    [HideInInspector] public float currentSpeed;
     float desiredSpeed;
 
     void Awake()
@@ -217,13 +217,13 @@ public class CarAIDriver : MonoBehaviour
         rb.angularVelocity = Vector3.zero;
     }
 
-    float GetApproxBrakeAccel()
+    public float GetApproxBrakeAccel()
     {
         // If your controller exposes real decel, use that; this is a safe default.
         return 10f;
     }
 
-    SimpleTrafficLightController GetNearestController()
+    public SimpleTrafficLightController GetNearestController()
     {
         SimpleTrafficLightController nearest = null;
         float best = float.PositiveInfinity;
@@ -278,12 +278,60 @@ public class AICarSensor : MonoBehaviour
             if (t == self || t.IsChildOf(self)) continue; // ignore self
 
             // count anything with AI or controller as a "car"
-            if (!t.GetComponentInParent<CarAIDriver>() && !t.GetComponentInParent<WheelCarController>()) continue;
+            var otherAI = t.GetComponentInParent<CarAIDriver>();
+            var otherController = t.GetComponentInParent<WheelCarController>();
+            
+            if (!otherAI && !otherController) continue;
 
             // only if it's in front (flat)
             Vector3 toOther = t.position - self.position; toOther.y = 0f;
             if (toOther.sqrMagnitude < 0.0001f) continue;
-            if (Vector3.Dot(self.forward, toOther.normalized) <= 0f) continue;
+            float dotProduct = Vector3.Dot(self.forward, toOther.normalized);
+            if (dotProduct <= 0.2f) continue; // car needs to be significantly in front (not perpendicular)
+
+            // Check if both cars are at a junction
+            var myTL = owner?.GetNearestController();
+            if (myTL != null && myTL.IsCarAtThisJunction(self) && myTL.IsCarAtThisJunction(t))
+            {
+                // Both at same junction - check if I have green light
+                float mySpeed = owner != null ? Mathf.Abs(owner.currentSpeed) : 0f;
+                float myBrakeAccel = owner != null ? owner.GetApproxBrakeAccel() : 10f;
+                bool iHaveGreen = !myTL.ShouldStopForCar(self, mySpeed, myBrakeAccel);
+                
+                Debug.Log($"[{self.name}] At junction. I have green: {iHaveGreen}, Other car: {t.name}");
+                
+                if (iHaveGreen)
+                {
+                    // I have green - check if other car is stopped
+                    bool otherIsStopped = false;
+                    
+                    if (otherAI != null)
+                    {
+                        otherIsStopped = Mathf.Abs(otherAI.currentSpeed) < 0.5f;
+                    }
+                    else if (otherController != null)
+                    {
+                        var rb = otherController.GetComponent<Rigidbody>();
+                        if (rb != null)
+                        {
+                            otherIsStopped = rb.linearVelocity.magnitude < 0.5f;
+                        }
+                    }
+                    
+                    Debug.Log($"[{self.name}] Other car stopped: {otherIsStopped}");
+                    
+                    // If I have green and other car is stopped, ignore it
+                    if (otherIsStopped)
+                    {
+                        Debug.Log($"[{self.name}] GREEN LIGHT - Ignoring stopped car and proceeding!");
+                        continue;
+                    }
+                }
+                else
+                {
+                    Debug.Log($"[{self.name}] RED LIGHT - Stopping for traffic light");
+                }
+            }
 
             return true;
         }
