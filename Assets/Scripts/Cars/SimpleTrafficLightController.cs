@@ -129,17 +129,22 @@ public class SimpleTrafficLightController : MonoBehaviour
             bool greenOccupiedNow   = IsValidIndex(currentIndex) && IsApproachOccupied(currentIndex, carTransform);
             bool withinGraceWindow  = (Time.time - lastGreenOccupiedTime) <= graceAfterGreenClear;
             
+            Debug.Log($"[TL] {carTransform.name} at STOP approach {atIdx} (current green: {currentIndex}) - Green occupied: {greenOccupiedNow}, Grace: {withinGraceWindow}");
+            
             if (greenOccupiedNow || withinGraceWindow)
             {
+                Debug.Log($"[TL] {carTransform.name} - STOP (green occupied or grace period)");
                 return true;
             }
 
             // 2) If multiple approaches are present now → cycle arbitrates.
             int occupied = CountOccupiedApproaches(carTransform);
+            Debug.Log($"[TL] {carTransform.name} - Occupied approaches: {occupied}, My turn: {atIdx == currentIndex}");
             
             if (occupied >= 2)
             {
-                bool shouldStop = atIdx != currentIndex;
+                bool shouldStop = (atIdx != currentIndex);
+                Debug.Log($"[TL] {carTransform.name} - Multiple cars at junction, should STOP: {shouldStop}");
                 return shouldStop;
             }
 

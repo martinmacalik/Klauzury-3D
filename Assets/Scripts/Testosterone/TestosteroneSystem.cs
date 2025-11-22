@@ -1,6 +1,7 @@
-using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.Events;
+using TMPro;
 
 public class TestosteroneSystem : MonoBehaviour
 {
@@ -10,6 +11,13 @@ public class TestosteroneSystem : MonoBehaviour
     [SerializeField] private float maxValue = 100f;
     [SerializeField] private float startValue = 60f;
     [SerializeField] private float decayPerSecond = 0.5f;
+
+    [Header("Game Over")]
+    [SerializeField] private TextMeshProUGUI gameOverText;
+    [SerializeField] private GameObject gameOverBackground; // Optional background panel/image
+    [TextArea(2, 4)]
+    [SerializeField] private string gameOverMessage = "The testosterone level has been depleted!";
+    [SerializeField] private float gameOverDisplayDuration = 3f;
 
     [Header("Events")]
     public UnityEvent OnDepleted;
@@ -54,7 +62,11 @@ public class TestosteroneSystem : MonoBehaviour
         if (!Mathf.Approximately(old, Current))
         {
             OnValueChanged?.Invoke(Normalized);
-            if (Current <= 0f) OnDepleted?.Invoke();
+            if (Current <= 0f)
+            {
+                OnDepleted?.Invoke();
+                OnTestosteroneDepleted();
+            }
         }
     }
 
@@ -93,5 +105,51 @@ public class TestosteroneSystem : MonoBehaviour
         // Check if there's an active car (player is driving)
         // CarEnterExit.Active is set when player enters a car
         return CarEnterExit.Active != null;
+    }
+
+    private void OnTestosteroneDepleted()
+    {
+        StartCoroutine(ShowGameOverAndReset());
+    }
+
+    [ContextMenu("Reset Game Over Message to Default")]
+    private void ResetGameOverMessage()
+    {
+        gameOverMessage = "The testosterone level has been depleted!";
+        Debug.Log("Game Over message reset to default: " + gameOverMessage);
+    }
+
+    private IEnumerator ShowGameOverAndReset()
+    {
+        // Show "You Lost" message
+        if (gameOverText != null)
+        {
+            gameOverText.text = gameOverMessage;
+            gameOverText.gameObject.SetActive(true);
+
+            // Show background if assigned
+            if (gameOverBackground != null)
+                gameOverBackground.SetActive(true);
+
+            // Wait for specified duration
+            yield return new WaitForSeconds(gameOverDisplayDuration);
+
+            // Hide the text
+            gameOverText.gameObject.SetActive(false);
+
+            // Hide background
+            if (gameOverBackground != null)
+                gameOverBackground.SetActive(false);
+        }
+
+        // Use the singleton instance to reset to menu
+        if (StartMenuController.Instance != null)
+        {
+            StartMenuController.Instance.ResetToMenu();
+        }
+        else
+        {
+            Debug.LogWarning("TestosteroneSystem: No StartMenuController found to reset to menu!");
+        }
     }
 }

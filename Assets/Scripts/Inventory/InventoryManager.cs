@@ -12,6 +12,7 @@ public class InventoryManager : MonoBehaviour
     [Header("Slots")]
     public IconSlot[] gunSlots;    // e.g., 2 weapon slots
     public IconSlot[] miscSlots;   // general inventory grid
+    public IconSlot keycardSlot;   // single keycard slot on home page
 
     [Header("Optional: play a sound on add / error")]
     public AudioSource sfx;
@@ -25,20 +26,110 @@ public class InventoryManager : MonoBehaviour
         if (!gameObject.scene.IsValid()) return; // ignore prefab stage
 
         Debug.Log($"[INV] InventoryManager awake on '{name}'. Active={gameObject.activeInHierarchy}, Enabled={enabled}");
+
+        // Validate that keycardSlot is not in miscSlots array
+        if (keycardSlot != null && miscSlots != null)
+        {
+            for (int i = 0; i < miscSlots.Length; i++)
+            {
+                if (miscSlots[i] == keycardSlot)
+                {
+                    Debug.LogError($"[INV] ERROR: keycardSlot '{keycardSlot.name}' is also in miscSlots[{i}]! Remove it from miscSlots array.");
+                }
+            }
+        }
     }
     
     public bool TryAddByName(string itemName)
     {
+        Debug.Log($"[INV] TryAddByName called for '{itemName}'");
+        
         if (!database || !database.TryGet(itemName, out var e) || !e.icon)
-        { Beep(false); return false; }
+        { 
+            Debug.LogWarning($"[INV] Failed to add '{itemName}' - database or entry not found");
+            Beep(false); 
+            return false; 
+        }
 
-        var target = e.category == InventoryDatabase.ItemCategory.Gun
-            ? FindFirstEmpty(gunSlots)
-            : FindFirstEmpty(miscSlots);
+        Debug.Log($"[INV] Item '{itemName}' found in database. Category={e.category}, Icon={e.icon.name}");
 
-        if (!target) { Beep(false); return false; }
+        IconSlot target = null;
+        bool isKeycard = e.category == InventoryDatabase.ItemCategory.Keycard;
+        
+        // Determine which slot to use based on category
+        if (e.category == InventoryDatabase.ItemCategory.Gun)
+        {
+            target = FindFirstEmpty(gunSlots);
+            Debug.Log($"[INV] Looking for gun slot, found: {(target ? target.name : "NONE")}");
+        }
+        else if (isKeycard)
+        {
+            target = keycardSlot; // Use dedicated keycard slot ONLY
+            Debug.Log($"[INV] Keycard detected! keycardSlot assigned: {(keycardSlot != null)}, IsEmpty: {(keycardSlot ? keycardSlot.IsEmpty.ToString() : "N/A")}");
+            
+            if (!target)
+            {
+                Debug.LogWarning($"[INV] Keycard slot not assigned for '{itemName}' - will still add to backpack (but NOT to misc slots)");
+            }
+            else if (!target.IsEmpty)
+            {
+                Debug.LogWarning($"[INV] Keycard slot already has an item - will still add to backpack (but NOT to misc slots)");
+            }
 
-        target.SetIcon(e.icon);
+            // IMPORTANT: Don't add keycards to miscSlots, only to keycardSlot
+        }
+        else
+        {
+            target = FindFirstEmpty(miscSlots);
+            Debug.Log($"[INV] Looking for misc slot, found: {(target ? target.name : "NONE")}");
+        }
+
+        // For keycard, if slot is not assigned, we still want to add to backpack
+        // So don't fail the whole operation
+        if (!target && !isKeycard) 
+        { 
+            Debug.LogWarning($"[INV] No empty slot found for '{itemName}' (not keycard)");
+            Beep(false); 
+            return false; 
+        }
+
+        if (target && target.IsEmpty)
+        {
+            target.SetIcon(e.icon);
+            Debug.Log($"[INV] ✓ Set icon for '{itemName}' in slot '{target.name}' (category={e.category})");
+        }
+        else if (target)
+        {
+            Debug.LogWarning($"[INV] Target slot '{target.name}' is not empty, skipping icon set");
+        }
+        
+        // Also add to the appropriate backpack inventory
+        if (e.category == InventoryDatabase.ItemCategory.Gun)
+        {
+            var wInv = WeaponInventory.Instance;
+            if (wInv != null)
+            {
+                wInv.AddWeapon(itemName);
+            }
+        }
+        else if (e.category == InventoryDatabase.ItemCategory.Keycard)
+        {
+            // Keycards go to MiscInventory
+            var mInv = MiscInventory.Instance;
+            if (mInv != null)
+            {
+                mInv.AddItem(itemName, 1);
+            }
+        }
+        else
+        {
+            var mInv = MiscInventory.Instance;
+            if (mInv != null)
+            {
+                mInv.AddItem(itemName, 1);
+            }
+        }
+        
         Beep(true);
         return true;
     }
@@ -124,7 +215,7 @@ public class InventoryManager : MonoBehaviour
             }
 
             // Determine which slot array to use based on category
-            IconSlot slot;
+            IconSlot slot = null;
             if (e.category == InventoryDatabase.ItemCategory.Gun)
             {
                 slot = FindFirstEmpty(gunSlots);
@@ -136,6 +227,23 @@ public class InventoryManager : MonoBehaviour
                 {
                     slot.SetIcon(e.icon);
                     chosenSlots.Add(slot);
+                }
+            }
+            else if (e.category == InventoryDatabase.ItemCategory.Keycard)
+            {
+                slot = keycardSlot;
+                if (!slot)
+                {
+                    Debug.LogWarning($"[INV] No keycard slot assigned for '{itemName}' — continuing (backpack will still get it).");
+                }
+                else if (slot.IsEmpty)
+                {
+                    slot.SetIcon(e.icon);
+                    chosenSlots.Add(slot);
+                }
+                else
+                {
+                    Debug.LogWarning($"[INV] Keycard slot already occupied for '{itemName}' — continuing (backpack will still get it).");
                 }
             }
             else
@@ -175,7 +283,9 @@ public class InventoryManager : MonoBehaviour
         {
             foreach (var itemName in pending)
             {
-                if (database.TryGet(itemName, out var e) && e.category != InventoryDatabase.ItemCategory.Gun)
+                if (database.TryGet(itemName, out var e) && 
+                    (e.category == InventoryDatabase.ItemCategory.Generic || 
+                     e.category == InventoryDatabase.ItemCategory.Keycard))
                 {
                     Debug.Log($"[INV] Adding '{itemName}' to MiscInventory");
                     mInv.AddItem(itemName, 1);

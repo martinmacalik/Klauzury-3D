@@ -15,12 +15,16 @@ public class MiscBackpackGrid : MonoBehaviour
     public EquipConfirmPopup confirmPrefab; // for regular misc items
     public MiscQuestPopup questPopupPrefab; // for quest items
 
+    [Header("Items that skip popup (equip directly)")]
+    public string[] noPopupItems = new string[] { "Keycard" }; // Add items that should equip without popup
+
     private readonly List<MiscSlotUI> _slots = new();
     private EquipConfirmPopup _confirm;
     private MiscQuestPopup _questPopup;
 
     void OnEnable()
     {
+        FindEquipmentIfNeeded();
         if (miscInventory) miscInventory.OnChanged += Rebuild;
         if (equipment) equipment.OnMiscEquippedChanged += RefreshEquipped;
         Rebuild();
@@ -29,6 +33,18 @@ public class MiscBackpackGrid : MonoBehaviour
     {
         if (miscInventory) miscInventory.OnChanged -= Rebuild;
         if (equipment) equipment.OnMiscEquippedChanged -= RefreshEquipped;
+    }
+
+    void FindEquipmentIfNeeded()
+    {
+        if (!equipment)
+        {
+            equipment = FindFirstObjectByType<EquipmentController>();
+            if (equipment)
+            {
+                equipment.OnMiscEquippedChanged += RefreshEquipped;
+            }
+        }
     }
 
     public void Rebuild()
@@ -51,7 +67,18 @@ public class MiscBackpackGrid : MonoBehaviour
             Debug.Log($"[MiscBackpackGrid] Creating slot for '{name}', icon={(entry.icon ? entry.icon.name : "NULL")}");
             
             var slot = Instantiate(slotPrefab, gridRoot);
-            slot.Setup(name, entry.icon, OnSlotClicked);
+
+            // If this item is in the noPopupItems list, disable button interaction
+            if (ShouldSkipPopup(name))
+            {
+                slot.Setup(name, entry.icon, null); // No callback = not clickable
+                Debug.Log($"[MiscBackpackGrid] '{name}' is in no-popup list - making it non-clickable");
+            }
+            else
+            {
+                slot.Setup(name, entry.icon, OnSlotClicked);
+            }
+
             _slots.Add(slot);
         }
         RefreshEquipped(equipment ? equipment.EquippedMisc : "");
@@ -59,7 +86,9 @@ public class MiscBackpackGrid : MonoBehaviour
 
     private void OnSlotClicked(string itemName)
     {
-        // Always use the MiscQuestPopup (it handles both quest and non-quest items)
+        // Note: Items in noPopupItems list (like keycard) won't trigger this because they're non-clickable
+
+        // Use the MiscQuestPopup for all clickable items (handles both quest and non-quest items)
         if (_questPopup == null)
         {
             if (MiscQuestPopup.SharedInstance != null)
@@ -71,22 +100,22 @@ public class MiscBackpackGrid : MonoBehaviour
                 var overlay = EnsureOverlayCanvas();
                 _questPopup = Instantiate(questPopupPrefab, overlay.transform);
                 _questPopup.name = "MiscQuestPopup (Shared)";
-                
+
                 // Add Canvas component with high sorting order
                 var selfCanvas = _questPopup.GetComponent<Canvas>();
                 if (!selfCanvas) selfCanvas = _questPopup.gameObject.AddComponent<Canvas>();
                 selfCanvas.overrideSorting = true;
                 selfCanvas.sortingOrder = 9999;
-                
+
                 if (!_questPopup.GetComponent<GraphicRaycaster>())
                     _questPopup.gameObject.AddComponent<GraphicRaycaster>();
-                
+
                 // Ensure scale is 1
                 var rt = _questPopup.transform as RectTransform;
                 if (rt) rt.localScale = Vector3.one;
-                    
+
                 _questPopup.transform.SetAsLastSibling();
-                
+
                 Debug.Log($"[MiscBackpackGrid] Created quest popup with sortingOrder={selfCanvas.sortingOrder}");
             }
             else
@@ -95,7 +124,7 @@ public class MiscBackpackGrid : MonoBehaviour
                 return;
             }
         }
-        
+
         _questPopup.ShowFor(itemName, equipment);
     }
     
@@ -113,6 +142,19 @@ public class MiscBackpackGrid : MonoBehaviour
     }
 
     private string GetSlotName(MiscSlotUI slot) => slot ? slot.name.Replace("(Clone)", "").Trim() : "";
+
+    private bool ShouldSkipPopup(string itemName)
+    {
+        if (noPopupItems == null || noPopupItems.Length == 0) return false;
+
+        foreach (var noPopupItem in noPopupItems)
+        {
+            if (string.Equals(noPopupItem, itemName, System.StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
 
     private Canvas EnsureOverlayCanvas()
     {

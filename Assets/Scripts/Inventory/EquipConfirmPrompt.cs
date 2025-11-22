@@ -14,7 +14,7 @@ public class EquipConfirmPopup : MonoBehaviour
     void Awake()
     {
         if (!group) group = GetComponent<CanvasGroup>();
-        
+
         // Don't destroy this popup when switching scenes
         if (SharedInstance == null)
         {
@@ -26,7 +26,7 @@ public class EquipConfirmPopup : MonoBehaviour
             Destroy(gameObject);
             return;
         }
-        
+
         Hide();
     }
 
@@ -56,7 +56,7 @@ public class EquipConfirmPopup : MonoBehaviour
         {
             rectTransform.localScale = Vector3.one;
         }
-        
+
         // Extra safety: ensure Canvas sorting is still on top
         var canvas = GetComponent<Canvas>();
         if (canvas)

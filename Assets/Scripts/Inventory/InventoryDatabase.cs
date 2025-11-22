@@ -13,7 +13,7 @@ public class InventoryDatabase : ScriptableObject
         public Sprite icon;                 // <-- NEW: PNG used in UI
     }
 
-    public enum ItemCategory { Generic, Gun }
+    public enum ItemCategory { Generic, Gun, Keycard }
 
     public Entry[] items;
 

@@ -211,7 +211,7 @@ public class CarAIDriver : MonoBehaviour
     void ParkCar()
     {
         if (!rb) return;  // safety check
-        
+
         // Ensure the car is not moving
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
@@ -280,7 +280,7 @@ public class AICarSensor : MonoBehaviour
             // count anything with AI or controller as a "car"
             var otherAI = t.GetComponentInParent<CarAIDriver>();
             var otherController = t.GetComponentInParent<WheelCarController>();
-            
+
             if (!otherAI && !otherController) continue;
 
             // only if it's in front (flat)
@@ -297,14 +297,14 @@ public class AICarSensor : MonoBehaviour
                 float mySpeed = owner != null ? Mathf.Abs(owner.currentSpeed) : 0f;
                 float myBrakeAccel = owner != null ? owner.GetApproxBrakeAccel() : 10f;
                 bool iHaveGreen = !myTL.ShouldStopForCar(self, mySpeed, myBrakeAccel);
-                
+
                 Debug.Log($"[{self.name}] At junction. I have green: {iHaveGreen}, Other car: {t.name}");
-                
+
                 if (iHaveGreen)
                 {
                     // I have green - check if other car is stopped
                     bool otherIsStopped = false;
-                    
+
                     if (otherAI != null)
                     {
                         otherIsStopped = Mathf.Abs(otherAI.currentSpeed) < 0.5f;
@@ -317,9 +317,9 @@ public class AICarSensor : MonoBehaviour
                             otherIsStopped = rb.linearVelocity.magnitude < 0.5f;
                         }
                     }
-                    
+
                     Debug.Log($"[{self.name}] Other car stopped: {otherIsStopped}");
-                    
+
                     // If I have green and other car is stopped, ignore it
                     if (otherIsStopped)
                     {

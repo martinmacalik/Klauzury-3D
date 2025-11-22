@@ -10,6 +10,7 @@ public class MiscUseController : MonoBehaviour
 
     void Update()
     {
+        FindEquipmentIfNeeded();
         if (!Input.GetKeyDown(useKey) || equipment == null || miscInventory == null || database == null) return;
 
         var name = equipment.EquippedMisc;
@@ -47,6 +48,14 @@ public class MiscUseController : MonoBehaviour
             // If you want auto-unequip when none left:
             if (miscInventory.CountOf(name) == 0 && string.Equals(equipment.EquippedMisc, name, System.StringComparison.OrdinalIgnoreCase))
                 equipment.EquipMisc(""); // clears UI
+        }
+    }
+
+    void FindEquipmentIfNeeded()
+    {
+        if (!equipment)
+        {
+            equipment = FindFirstObjectByType<EquipmentController>();
         }
     }
 }

@@ -24,7 +24,7 @@ public class WeaponBackpackGrid : MonoBehaviour
     void Awake()
     {
         if (!inventory) inventory = WeaponInventory.Instance;
-        if (!equipment) equipment = FindObjectOfType<EquipmentController>(true);
+        FindEquipmentIfNeeded();
         if (equipment) equipment.OnEquippedChanged += OnEquippedChanged;
         Rebuild();
     }
@@ -33,8 +33,21 @@ public class WeaponBackpackGrid : MonoBehaviour
     {
         if (!inventory) inventory = WeaponInventory.Instance;
         if (inventory) inventory.OnChanged += Rebuild;
+        FindEquipmentIfNeeded();
         if (equipment) equipment.OnEquippedChanged += OnEquippedChanged;
         Rebuild();
+    }
+
+    void FindEquipmentIfNeeded()
+    {
+        if (!equipment)
+        {
+            equipment = FindFirstObjectByType<EquipmentController>();
+            if (equipment)
+            {
+                equipment.OnEquippedChanged += OnEquippedChanged;
+            }
+        }
     }
 
     void OnDisable()

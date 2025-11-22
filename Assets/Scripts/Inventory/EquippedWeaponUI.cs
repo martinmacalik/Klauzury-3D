@@ -14,9 +14,28 @@ public class EquippedWeaponUI : MonoBehaviour
 
     void Awake()
     {
-        if (!equipment) equipment = FindObjectOfType<EquipmentController>(true);
+        FindEquipmentIfNeeded();
         if (equipment) equipment.OnEquippedChanged += Refresh;
         Refresh(equipment ? equipment.Equipped : null);
+    }
+
+    void OnEnable()
+    {
+        // Re-find equipment if it was lost (e.g., after menu reset)
+        FindEquipmentIfNeeded();
+        if (equipment) Refresh(equipment.Equipped);
+    }
+
+    void FindEquipmentIfNeeded()
+    {
+        if (!equipment)
+        {
+            equipment = FindFirstObjectByType<EquipmentController>();
+            if (equipment)
+            {
+                equipment.OnEquippedChanged += Refresh;
+            }
+        }
     }
 
     void OnDestroy()

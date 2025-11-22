@@ -60,7 +60,16 @@ public class IconSlot : MonoBehaviour
         iconImage.enabled = iconImage.sprite != null;
 
         ApplySize(); // <- key change
-        Debug.Log($"[IconSlot:{name}] SetIcon -> sprite='{(iconImage.sprite ? iconImage.sprite.name : "null")}', size={_iconRT.sizeDelta}");
+        
+        // Safe logging with null check for _iconRT
+        if (_iconRT != null)
+        {
+            Debug.Log($"[IconSlot:{name}] SetIcon -> sprite='{(iconImage.sprite ? iconImage.sprite.name : "null")}', size={_iconRT.sizeDelta}");
+        }
+        else
+        {
+            Debug.Log($"[IconSlot:{name}] SetIcon -> sprite='{(iconImage.sprite ? iconImage.sprite.name : "null")}' (_iconRT is null)");
+        }
     }
 
     void SetEmptyVisual()

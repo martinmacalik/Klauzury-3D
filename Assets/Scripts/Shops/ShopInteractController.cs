@@ -44,21 +44,38 @@ public class ShopInteractController : MonoBehaviour
         // 3) Tooltip
         if (_current && tooltip)
         {
-            tooltip.Show(_current.itemName, _current.price, "Press E to put in basket");
+            // Show different prompt for free items
+            if (_current.price == 0)
+            {
+                tooltip.Show(_current.itemName, 0, "Press E to pick up");
+            }
+            else
+            {
+                tooltip.Show(_current.itemName, _current.price, "Press E to put in basket");
+            }
         }
         else if (tooltip)
         {
             tooltip.Hide();
         }
 
-        // 4) Add to basket on E
+        // 4) Add to basket on E (or pickup directly if free)
         if (_current && Input.GetKeyDown(addKey))
         {
+            string name = _current.itemName;
+            int price = _current.price;
+
+            // FREE ITEM BYPASS: if price is 0, add directly to inventory and destroy
+            if (price == 0)
+            {
+                PickupFreeItem(_current);
+                ConsumedInteractThisFrame = true;
+                return;
+            }
+
+            // Normal paid items go into basket
             if (basket != null)
             {
-                string name = _current.itemName;
-                int price   = _current.price;
-
                 // NEW: disallow adding if already owned
                 var wInv = WeaponInventory.Instance;
                 if (wInv && wInv.CountOf(name) > 0)
@@ -85,6 +102,84 @@ public class ShopInteractController : MonoBehaviour
                 Debug.LogWarning("No Basket reference on ShopInteractController.");
             }
         }
+    }
+
+    void PickupFreeItem(ShopItem item)
+    {
+        if (item == null)
+        {
+            Debug.LogWarning("[ShopInteract] PickupFreeItem: item is null!");
+            return;
+        }
+
+        Debug.Log($"[ShopInteract] Picking up free item: '{item.itemName}'");
+
+        // Try to use InventoryManager first
+        var invManager = InventoryManager.Instance;
+        if (invManager == null)
+        {
+            invManager = FindFirstObjectByType<InventoryManager>();
+        }
+        if (invManager == null)
+        {
+            // Try to find even if inactive
+            invManager = Resources.FindObjectsOfTypeAll<InventoryManager>()
+                .FirstOrDefault(m => m.gameObject.scene.name != null);
+        }
+        
+        if (invManager != null)
+        {
+            invManager.TryAddByName(item.itemName);
+            Debug.Log($"[ShopInteract] Added '{item.itemName}' via InventoryManager");
+        }
+        else
+        {
+            // Fallback: Add directly to backpack inventories
+            Debug.LogWarning("[ShopInteract] InventoryManager not found - adding directly to backpack");
+            
+            // Try to determine category from database
+            var db = FindFirstObjectByType<InventoryDatabase>();
+            if (db == null)
+            {
+                // Try to find it as an asset
+                db = Resources.FindObjectsOfTypeAll<InventoryDatabase>().FirstOrDefault();
+            }
+            
+            if (db != null && db.TryGet(item.itemName, out var entry))
+            {
+                if (entry.category == InventoryDatabase.ItemCategory.Gun)
+                {
+                    var wInv = WeaponInventory.Instance ?? FindFirstObjectByType<WeaponInventory>();
+                    if (wInv != null)
+                    {
+                        wInv.AddWeapon(item.itemName);
+                        Debug.Log($"[ShopInteract] Added '{item.itemName}' to WeaponInventory");
+                    }
+                }
+                else // Generic, Keycard, or any other category goes to MiscInventory
+                {
+                    var mInv = MiscInventory.Instance ?? FindFirstObjectByType<MiscInventory>();
+                    if (mInv != null)
+                    {
+                        mInv.AddItem(item.itemName, 1);
+                        Debug.Log($"[ShopInteract] Added '{item.itemName}' to MiscInventory");
+                    }
+                }
+            }
+            else
+            {
+                Debug.LogError($"[ShopInteract] Could not determine category for '{item.itemName}' - database not found or item not in database");
+            }
+        }
+
+        // Destroy the shop item object
+        if (_current == item)
+        {
+            _current.SetHighlighted(false);
+            _current = null;
+        }
+        
+        Destroy(item.gameObject);
     }
 
     ShopItem RaycastForItem()

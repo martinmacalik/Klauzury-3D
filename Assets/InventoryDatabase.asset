@@ -29,6 +29,10 @@ MonoBehaviour:
     prefab: {fileID: 1491283176061640, guid: 6272c12ee766bad489c77e2b199b4c64, type: 3}
     category: 1
     icon: {fileID: 21300000, guid: 1d5ec20ce68182447b12b88014527821, type: 3}
+  - name: KeyCard
+    prefab: {fileID: 142312527805466163, guid: 96bfa0ef4978fea4f82b2d40fd190468, type: 3}
+    category: 2
+    icon: {fileID: 21300000, guid: 99dc07d024cc63e4a92d5de12b696baf, type: 3}
   - name: TestBottle
     prefab: {fileID: 1008148459309804, guid: 1e86b2134dffc1c4fa8a7c20e02f599c, type: 3}
     category: 0

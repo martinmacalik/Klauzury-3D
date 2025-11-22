@@ -12,8 +12,39 @@ public class EquippedMiscUI : MonoBehaviour
 
     void Awake()
     {
+        FindEquipmentIfNeeded();
         if (equipment) equipment.OnMiscEquippedChanged += Refresh;
+
+        // VALIDATION: Check if our iconImage is part of an IconSlot
+        if (iconImage)
+        {
+            var parentIconSlot = iconImage.GetComponentInParent<IconSlot>();
+            if (parentIconSlot != null)
+            {
+                Debug.LogError($"[EquippedMiscUI:{gameObject.name}] ⚠️ CONFIGURATION ERROR! This EquippedMiscUI's iconImage is inside an IconSlot ('{parentIconSlot.name}'). This will cause the keycard to appear in misc slots when equipped! FIX: Create a separate Image for EquippedMiscUI, don't use an IconSlot's image.");
+            }
+        }
+
         Refresh(equipment ? equipment.EquippedMisc : "");
+    }
+
+    void OnEnable()
+    {
+        // Re-find equipment if it was lost (e.g., after menu reset)
+        FindEquipmentIfNeeded();
+        if (equipment) Refresh(equipment.EquippedMisc);
+    }
+
+    void FindEquipmentIfNeeded()
+    {
+        if (!equipment)
+        {
+            equipment = FindFirstObjectByType<EquipmentController>();
+            if (equipment)
+            {
+                equipment.OnMiscEquippedChanged += Refresh;
+            }
+        }
     }
     void OnDestroy()
     {
@@ -29,15 +60,19 @@ public class EquippedMiscUI : MonoBehaviour
             return;
         }
 
+        Debug.Log($"[EquippedMiscUI:{gameObject.name}] Refresh called for '{miscName}', iconImage.gameObject='{iconImage.gameObject.name}'");
+
         if (string.IsNullOrEmpty(miscName) || !database || !database.TryGet(miscName, out var entry))
         {
             iconImage.sprite = emptySprite;
             iconImage.color = emptyColor;
+            Debug.Log($"[EquippedMiscUI:{gameObject.name}] Set to empty");
         }
         else
         {
             iconImage.sprite = entry.icon;
             iconImage.color = equippedColor;
+            Debug.Log($"[EquippedMiscUI:{gameObject.name}] Set icon to '{entry.icon.name}' on Image '{iconImage.gameObject.name}'");
         }
     }
 }

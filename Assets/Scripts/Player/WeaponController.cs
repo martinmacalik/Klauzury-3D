@@ -49,7 +49,7 @@ public class WeaponHotkeys : MonoBehaviour
 
     void Awake()
     {
-        _equipment = FindObjectOfType<EquipmentController>(true);
+        FindEquipmentIfNeeded();
 
         // Auto-assign 1..4
         var defaults = new[] { KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4 };
@@ -115,6 +115,7 @@ public class WeaponHotkeys : MonoBehaviour
         }
 
         // Must be equipped? (optional)
+        FindEquipmentIfNeeded();
         if (requireEquipped && _equipment && _equipment.Equipped != g.weaponName)
         {
             if (sfx && deniedSfx) sfx.PlayOneShot(deniedSfx);
@@ -180,5 +181,13 @@ public class WeaponHotkeys : MonoBehaviour
         if (playerAnimator && !string.IsNullOrEmpty(readyBool))
             playerAnimator.SetBool(readyBool, false);
         _currentIndex = -1;
+    }
+
+    void FindEquipmentIfNeeded()
+    {
+        if (!_equipment)
+        {
+            _equipment = FindFirstObjectByType<EquipmentController>();
+        }
     }
 }

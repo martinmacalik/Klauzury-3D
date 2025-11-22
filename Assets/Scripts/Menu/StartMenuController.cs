@@ -4,6 +4,8 @@ using System.Collections.Generic;
 
 public class StartMenuController : MonoBehaviour
 {
+    public static StartMenuController Instance { get; private set; }
+
     [Header("Menu")]
     public GameObject menuRig;          // root of the flying menu
     public CanvasGroup menuCanvasGroup; // for fade
@@ -25,6 +27,16 @@ public class StartMenuController : MonoBehaviour
 
     void Awake()
     {
+        // Singleton pattern
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+
+
         // Cameras
         if (menuCamera) menuCamera.gameObject.SetActive(true);
         if (playerCamera) playerCamera.gameObject.SetActive(false);
@@ -50,6 +62,12 @@ public class StartMenuController : MonoBehaviour
         var menuAL   = menuCamera   ? menuCamera.GetComponent<AudioListener>()   : null;
         var playerAL = playerCamera ? playerCamera.GetComponent<AudioListener>() : null;
         if (menuAL && playerAL) playerAL.enabled = false;
+    }
+
+    void OnDestroy()
+    {
+        if (Instance == this)
+            Instance = null;
     }
 
     void Update()
@@ -78,6 +96,10 @@ public class StartMenuController : MonoBehaviour
 
     IEnumerator DoStartSequence()
     {
+        // Reset testosterone at the start of the game
+        if (TestosteroneSystem.Instance != null)
+            TestosteroneSystem.Instance.ResetToStart();
+
         // Fade menu out quickly
         yield return StartCoroutine(Fade(menuCanvasGroup, 0f, 0.25f));
 
@@ -105,6 +127,60 @@ public class StartMenuController : MonoBehaviour
 
         // Guns ok now
         WeaponHotkeys.GunIsReady = true;
+    }
+
+    // Call this to reset the game back to the menu
+    public void ResetToMenu()
+    {
+        if (!_started) return; // Already in menu
+        _started = false;
+
+        // Do immediate setup first (without coroutine)
+        DoImmediateReset();
+
+        // Now start the fade coroutine (GameObject should be active now)
+        StartCoroutine(DoResetFade());
+    }
+
+    void DoImmediateReset()
+    {
+        // Disable player control immediately
+        foreach (var b in disableUntilStart) if (b) b.enabled = false;
+        foreach (var go in objectsUntilStart) if (go) go.SetActive(false);
+
+        // Guns safe
+        WeaponHotkeys.GunIsReady = false;
+
+        // Switch cameras
+        if (playerCamera) playerCamera.gameObject.SetActive(false);
+        if (menuCamera) menuCamera.gameObject.SetActive(true);
+
+        // AudioListener sanity
+        var menuAL   = menuCamera   ? menuCamera.GetComponent<AudioListener>()   : null;
+        var playerAL = playerCamera ? playerCamera.GetComponent<AudioListener>() : null;
+        if (menuAL) menuAL.enabled = true;
+        if (playerAL) playerAL.enabled = false;
+
+        // Show menu rig - CRITICAL: do this before trying to start coroutine
+        if (menuRig) menuRig.SetActive(true);
+
+        // Ensure this GameObject is also active
+        if (!gameObject.activeInHierarchy)
+            gameObject.SetActive(true);
+
+        // Cursor
+        if (unlockCursorInMenu) { Cursor.visible = true; Cursor.lockState = CursorLockMode.None; }
+
+        // Reset testosterone to start value
+        if (TestosteroneSystem.Instance != null)
+            TestosteroneSystem.Instance.ResetToStart();
+    }
+
+    IEnumerator DoResetFade()
+    {
+        // Fade menu in
+        if (menuCanvasGroup) menuCanvasGroup.alpha = 0f;
+        yield return StartCoroutine(Fade(menuCanvasGroup, 1f, 0.5f));
     }
 
     IEnumerator Fade(CanvasGroup cg, float to, float seconds)

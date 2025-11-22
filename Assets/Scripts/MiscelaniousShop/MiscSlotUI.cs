@@ -20,6 +20,11 @@ public class MiscSlotUI : MonoBehaviour
         // Auto-find iconSlot if not assigned
         if (!iconSlot) iconSlot = GetComponentInChildren<IconSlot>(true);
         if (!iconSlot) Debug.LogError($"[MiscSlotUI:{name}] IconSlot component not found!");
+
+        // Auto-find button if not assigned
+        if (!button) button = GetComponent<Button>();
+        if (!button) button = GetComponentInChildren<Button>(true);
+        if (!button) Debug.LogWarning($"[MiscSlotUI:{name}] Button component not found!");
     }
 
     public void Setup(string itemName, Sprite icon, Action<string> onClicked)
@@ -39,10 +44,37 @@ public class MiscSlotUI : MonoBehaviour
         }
         
         if (background) background.color = normalBg;
+
         if (button)
         {
             button.onClick.RemoveAllListeners();
-            button.onClick.AddListener(() => onClicked?.Invoke(_name));
+
+            if (onClicked != null)
+            {
+                button.onClick.AddListener(() => onClicked.Invoke(_name));
+                button.interactable = true;
+                Debug.Log($"[MiscSlotUI:{name}] Button enabled for '{itemName}'");
+            }
+            else
+            {
+                // No callback means this item shouldn't be clickable (e.g., keycard)
+                button.interactable = false;
+                button.enabled = false; // Also disable the component itself
+
+                // Also disable any other Button components (in case there are multiple)
+                var allButtons = GetComponentsInChildren<Button>(true);
+                foreach (var btn in allButtons)
+                {
+                    btn.interactable = false;
+                    btn.enabled = false;
+                }
+
+                Debug.Log($"[MiscSlotUI:{name}] Button DISABLED for '{itemName}' (disabled {allButtons.Length} button(s))");
+            }
+        }
+        else
+        {
+            Debug.LogWarning($"[MiscSlotUI:{name}] Button is NULL - cannot disable for '{itemName}'");
         }
     }
 

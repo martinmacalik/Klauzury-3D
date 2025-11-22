@@ -26,13 +26,44 @@ public class ShopItem : MonoBehaviour
     bool _isHighlighted;
     static readonly int _EmissionColor = Shader.PropertyToID("_EmissionColor");
 
+    // Store original materials for overlay mode
+    Material[][] _originalMaterials;
     // Emission path state
     Material[][] _originalInstancedMats;
 
     void Awake()
     {
         if (renderersToHighlight == null || renderersToHighlight.Length == 0)
-            renderersToHighlight = GetComponentsInChildren<Renderer>(true);
+        {
+            // Auto-grab only 3D renderers, exclude UI renderers
+            var allRenderers = GetComponentsInChildren<Renderer>(true);
+            var filtered = new System.Collections.Generic.List<Renderer>();
+            
+            foreach (var r in allRenderers)
+            {
+                // Only include MeshRenderer and SkinnedMeshRenderer (3D objects)
+                // Exclude UI.Image, UI.RawImage, etc which use CanvasRenderer
+                if (r is MeshRenderer || r is SkinnedMeshRenderer)
+                {
+                    filtered.Add(r);
+                }
+            }
+            
+            renderersToHighlight = filtered.ToArray();
+            
+            if (renderersToHighlight.Length == 0)
+            {
+                Debug.LogWarning($"[ShopItem] '{name}' has no 3D renderers to highlight. Assign manually or add MeshRenderer/SkinnedMeshRenderer.", this);
+            }
+        }
+
+        // Store original materials for both modes
+        _originalMaterials = new Material[renderersToHighlight.Length][];
+        for (int i = 0; i < renderersToHighlight.Length; i++)
+        {
+            var r = renderersToHighlight[i];
+            if (r) _originalMaterials[i] = r.sharedMaterials;
+        }
 
         if (!useOverlayMaterial)
         {
@@ -72,31 +103,29 @@ public class ShopItem : MonoBehaviour
             return;
         }
 
-        foreach (var r in renderersToHighlight)
+        for (int i = 0; i < renderersToHighlight.Length; i++)
         {
+            var r = renderersToHighlight[i];
             if (!r) continue;
-            var mats = r.sharedMaterials; // ok to use shared here; we’re only adding/removing an extra slot
+            
             if (on)
             {
-                // add overlay if not already present
-                bool has = System.Array.Exists(mats, m => m == overlayMaterial);
-                if (!has)
+                // Replace ALL materials with the overlay material
+                // This covers all 4 submeshes (metal, hologram, button, light)
+                int materialCount = _originalMaterials[i].Length;
+                var newMats = new Material[materialCount];
+                for (int m = 0; m < materialCount; m++)
                 {
-                    var newMats = new Material[mats.Length + 1];
-                    for (int i = 0; i < mats.Length; i++) newMats[i] = mats[i];
-                    newMats[newMats.Length - 1] = overlayMaterial;
-                    r.sharedMaterials = newMats;
+                    newMats[m] = overlayMaterial;
                 }
+                r.sharedMaterials = newMats;
             }
             else
             {
-                // remove overlay if present
-                int idx = System.Array.FindIndex(mats, m => m == overlayMaterial);
-                if (idx >= 0)
+                // Restore original materials
+                if (_originalMaterials[i] != null)
                 {
-                    var newMats = new System.Collections.Generic.List<Material>(mats);
-                    newMats.RemoveAt(idx);
-                    r.sharedMaterials = newMats.ToArray();
+                    r.sharedMaterials = _originalMaterials[i];
                 }
             }
         }
