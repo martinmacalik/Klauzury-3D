@@ -5,6 +5,7 @@ using System.Collections.Generic;
 public class StartMenuController : MonoBehaviour
 {
     public static StartMenuController Instance { get; private set; }
+    public bool HasStarted => _started;
 
     [Header("Menu")]
     public GameObject menuRig;          // root of the flying menu
@@ -72,6 +73,16 @@ public class StartMenuController : MonoBehaviour
 
     void Update()
     {
+        // Keep cursor visible and unlocked while in menu
+        if (!_started && unlockCursorInMenu)
+        {
+            if (!Cursor.visible || Cursor.lockState != CursorLockMode.None)
+            {
+                Cursor.visible = true;
+                Cursor.lockState = CursorLockMode.None;
+            }
+        }
+
         if (!_started && Input.GetKeyDown(debugStartKey))
             StartGame();
     }

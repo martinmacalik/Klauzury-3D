@@ -35,8 +35,16 @@ public class PlayerMovement : MonoBehaviour
     void Start()
     {
         characterController = GetComponent<CharacterController>();
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+    }
+
+    void OnEnable()
+    {
+        // Only lock cursor if we're not in the start menu
+        if (StartMenuController.Instance == null || StartMenuController.Instance.HasStarted)
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
     }
 
     void Update()

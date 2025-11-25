@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 
+// Updated to support map regeneration for second attempts
 public class GridMaze : MonoBehaviour
 {
     public int mazeWidth = 20;
@@ -364,5 +365,32 @@ public class GridMaze : MonoBehaviour
     public int GetTotalHackableTiles()
     {
         return _hackableTiles.Count;
+    }
+    
+    public void RegenerateMap()
+    {
+        // Clear hacked tiles
+        _hackedTiles.Clear();
+        
+        // Destroy old visual elements
+        if (_tilesContainer != null)
+            Destroy(_tilesContainer);
+        if (_linesContainer != null)
+            Destroy(_linesContainer);
+        
+        // Generate new maze and visuals
+        GenerateMaze();
+        CreateVisualMaze();
+        
+        // Reset player position to center
+        var player = FindFirstObjectByType<GridBallPlayer>();
+        if (player != null)
+        {
+            Vector3 startPos = GridToWorld(new Vector2Int(mazeWidth / 2, mazeHeight / 2));
+            player.transform.position = startPos;
+            Debug.Log($"[GridMaze] Player reset to center: {startPos}");
+        }
+        
+        Debug.Log("[GridMaze] Map regenerated for second attempt");
     }
 }

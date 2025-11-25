@@ -67,13 +67,26 @@ public class TileHackingController : MonoBehaviour
     
     void CheckForHackablePosition()
     {
-        if (Input.GetKeyDown(hackKey) && player != null && gridMaze != null)
+        if (Input.GetKeyDown(hackKey))
         {
-            Vector3 playerPos = player.transform.position;
+            Debug.Log($"[TileHacking] E key pressed! Player null? {player == null}, GridMaze null? {gridMaze == null}");
             
-            if (gridMaze.IsHackableTile(playerPos))
+            if (player != null && gridMaze != null)
             {
-                StartHacking(playerPos);
+                Vector3 playerPos = player.transform.position;
+                bool isHackable = gridMaze.IsHackableTile(playerPos);
+                
+                Debug.Log($"[TileHacking] Player at {playerPos}, Is hackable? {isHackable}");
+                
+                if (isHackable)
+                {
+                    Debug.Log("[TileHacking] Starting hack!");
+                    StartHacking(playerPos);
+                }
+                else
+                {
+                    Debug.Log("[TileHacking] Tile not hackable - not a blue tile or already hacked");
+                }
             }
         }
     }
