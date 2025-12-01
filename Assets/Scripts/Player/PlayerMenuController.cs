@@ -153,7 +153,7 @@ public class PlayerMenuController : MonoBehaviour
     {
         Gems  = Mathf.Max(0, Gems  + amount); 
         RefreshCounters();
-        GameEvents.RaiseGemsChanged(Gems);
+        //GameEvents.RaiseGemsChanged(Gems);
     }
 
     public void AddKillScore(int amount = 1)

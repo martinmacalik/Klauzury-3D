@@ -34,6 +34,11 @@ public class SimpleGun : MonoBehaviour
     [SerializeField] float tracerSpeed = 300f;    // m/s (visual)
     [SerializeField] float tracerStay = 0.04f;    // linger time
 
+    [Header("Audio")]
+    [SerializeField] AudioClip gunshotSFX;        // Gunshot sound effect
+    [SerializeField] AudioSource audioSource;     // AudioSource to play sound (optional, will auto-create if null)
+    [SerializeField] [Range(0f, 1f)] float gunshotVolume = 0.8f;
+
     // Animator hashes
     static readonly int Hash_IsADS   = Animator.StringToHash("IsADS");
     static readonly int Hash_Fire    = Animator.StringToHash("Fire");
@@ -44,6 +49,18 @@ public class SimpleGun : MonoBehaviour
         if (!playerCam) Debug.LogError("SimpleGun: playerCam not set", this);
         if (!animator) Debug.LogWarning("SimpleGun: animator not set", this);
         if (!muzzle)   Debug.LogWarning("SimpleGun: muzzle not set – assign a barrel tip.", this);
+        
+        // Auto-create AudioSource if not assigned
+        if (!audioSource)
+        {
+            audioSource = GetComponent<AudioSource>();
+            if (!audioSource)
+            {
+                audioSource = gameObject.AddComponent<AudioSource>();
+                audioSource.playOnAwake = false;
+                audioSource.spatialBlend = 0f; // 2D sound
+            }
+        }
     }
 
     void Update()
@@ -119,8 +136,19 @@ public class SimpleGun : MonoBehaviour
 
         if (animator) animator.SetTrigger(Hash_Fire);
 
+        // Play gunshot sound
+        PlayGunshotSound();
+
         // Shoot immediately (or gate by an animation event if you prefer)
         DoShoot();
+    }
+    
+    void PlayGunshotSound()
+    {
+        if (gunshotSFX && audioSource)
+        {
+            audioSource.PlayOneShot(gunshotSFX, gunshotVolume);
+        }
     }
 
     public void DoShoot()

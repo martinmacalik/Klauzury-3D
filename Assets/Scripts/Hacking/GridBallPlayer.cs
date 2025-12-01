@@ -360,6 +360,24 @@ public class GridBallPlayer : MonoBehaviour
         _targetPosition = transform.position;
     }
     
+    // Public method to reset player to maze start position
+    public void ResetToMazeStart()
+    {
+        if (gridMaze != null)
+        {
+            Vector3 startPos = gridMaze.GetStartPosition();
+            transform.position = startPos;
+            _currentGridPosition = GetGridPosition(startPos);
+            _targetPosition = startPos;
+            _isMoving = false;
+            Debug.Log($"[GridBallPlayer] Reset to maze start position: {startPos}");
+        }
+        else
+        {
+            Debug.LogWarning("[GridBallPlayer] Cannot reset - no GridMaze reference!");
+        }
+    }
+    
     void CreateGridVisualization()
     {
         // Create a container for grid lines

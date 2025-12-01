@@ -18,34 +18,23 @@ public class HackingSceneManager : MonoBehaviour
     public string returnSceneName = "Main";
     [Tooltip("Check every X seconds if all tiles are hacked")]
     public float checkCompletionInterval = 0.5f;
-    [Tooltip("Display success message for this many seconds before teleporting")]
-    public float successMessageDuration = 2f;
     
-    [Header("Second Attempt")]
-    [Tooltip("Allow a second attempt if testosterone runs out")]
-    public bool allowSecondAttempt = true;
+    [Header("Attempt Settings")]
+    [Tooltip("Maximum number of attempts allowed (e.g., 3 = player gets 3 tries)")]
+    public int maxAttempts = 3;
     
-    [Header("Success UI")]
-    [Tooltip("Text to display when hack is successful")]
-    public TMPro.TextMeshProUGUI successMessageText;
-    [Tooltip("Background panel for success message (optional)")]
-    public GameObject successMessageBackground;
+    [Header("UI Messages")]
+    [Tooltip("Text to display attempts remaining (optional)")]
+    public TMPro.TextMeshProUGUI attemptsRemainingText;
     [TextArea(2, 4)]
-    public string successMessage = "SOCIAL MEDIA DELETED SUCCESSFULLY\n\nYOU WIN!";
-    
-    [Header("Player Spawn")]
-    [Tooltip("Where to spawn the player when returning to main scene")]
-    public Vector3 returnSpawnPosition = Vector3.zero;
-    [Tooltip("Player rotation when spawning back")]
-    public Vector3 returnSpawnRotation = Vector3.zero;
+    [Tooltip("Message to display when player loses")]
+    public string lossMessage = "YOU LOST!\n\nAll attempts exhausted.";
+    [TextArea(2, 4)]
+    [Tooltip("Message to display when player wins")]
+    public string winMessage = "YOU WIN!\n\nSocial media deleted successfully.";
     
     [Header("References")]
     public GridMaze gridMaze;
-    
-    // Static fields to store spawn info
-    public static Vector3 SpawnPosition { get; private set; }
-    public static Vector3 SpawnRotation { get; private set; }
-    public static bool ShouldRepositionPlayer { get; private set; }
     
     private float _originalDecayRate;
     private bool _hasModifiedDecay;
@@ -54,6 +43,7 @@ public class HackingSceneManager : MonoBehaviour
     private string _currentSceneName;
     private int _attemptCount;
     private bool _isHandlingTestosteroneDepletion;
+    private GameObject _lossButton;
     
     void Awake()
     {
@@ -79,12 +69,6 @@ public class HackingSceneManager : MonoBehaviour
     void Start()
     {
         CheckCurrentScene();
-        
-        // Hide success message initially
-        if (successMessageText != null)
-            successMessageText.gameObject.SetActive(false);
-        if (successMessageBackground != null)
-            successMessageBackground.SetActive(false);
         
         // Subscribe to testosterone depletion event
         var testSystem = TestosteroneSystem.Instance;
@@ -135,13 +119,20 @@ public class HackingSceneManager : MonoBehaviour
         if (_isInHackingScene)
         {
             Debug.Log($"[HackingSceneManager] Entered hacking scene '{_currentSceneName}' - looking for GridMaze...");
+            // Reset attempt tracking for new hacking session
+            _attemptCount = 0;
+            _isHandlingTestosteroneDepletion = false;
             TryFindGridMaze();
+            FindAndHideLossButton();
             ApplyTestosteroneMultiplier();
+            UpdateAttemptsDisplay();
         }
         else
         {
             Debug.Log($"[HackingSceneManager] In main scene '{_currentSceneName}' - restoring normal testosterone rate");
             RestoreOriginalDecayRate();
+            HideAttemptsDisplay();
+            _lossButton = null; // Clear reference when leaving hacking scene
         }
     }
     
@@ -160,6 +151,43 @@ public class HackingSceneManager : MonoBehaviour
             }
         }
     }
+    
+    void FindAndHideLossButton()
+    {
+        if (_lossButton == null)
+        {
+            _lossButton = GameObject.FindGameObjectWithTag("ButtonLoss");
+            if (_lossButton != null)
+            {
+                // Register the button click handler
+                var button = _lossButton.GetComponent<UnityEngine.UI.Button>();
+                if (button != null)
+                {
+                    // Clear any existing listeners and add our function
+                    button.onClick.RemoveAllListeners();
+                    button.onClick.AddListener(ReturnToMainMenu);
+                    Debug.Log("[HackingSceneManager] Loss button found, click handler registered, and button hidden");
+                }
+                else
+                {
+                    Debug.LogWarning("[HackingSceneManager] ButtonLoss GameObject found but has no Button component!");
+                }
+                
+                _lossButton.SetActive(false);
+            }
+            else
+            {
+                Debug.LogWarning("[HackingSceneManager] No GameObject found with tag 'ButtonLoss'");
+            }
+        }
+        else
+        {
+            // Just hide it if we already have the reference
+            _lossButton.SetActive(false);
+        }
+    }
+    
+
     
     void OnEnable()
     {
@@ -264,65 +292,44 @@ public class HackingSceneManager : MonoBehaviour
     
     System.Collections.IEnumerator ShowSuccessAndReturn()
     {
-        Debug.Log($"[HackingSceneManager] All tiles hacked! Returning to main scene...");
+        Debug.Log("[HackingSceneManager] All tiles hacked - showing win UI...");
         
-        // Store spawn position for main scene
-        SpawnPosition = returnSpawnPosition;
-        SpawnRotation = returnSpawnRotation;
-        ShouldRepositionPlayer = true;
+        // Stop checking for completion
+        _checkTimer = -999f;
         
-        // Subscribe to scene loaded event to show message after scene loads
-        SceneManager.sceneLoaded += OnSuccessSceneLoaded;
+        // Brief pause
+        yield return new WaitForSeconds(0.5f);
         
-        // Return to main scene immediately (no waiting)
-        ReturnToMainScene();
-        
-        yield break;
-    }
-    
-    void OnSuccessSceneLoaded(Scene scene, LoadSceneMode mode)
-    {
-        // Only handle if we just successfully hacked
-        if (!LastHackWasSuccessful) return;
-        
-        // Unsubscribe immediately
-        SceneManager.sceneLoaded -= OnSuccessSceneLoaded;
-        
-        Debug.Log("[HackingSceneManager] Main scene loaded after successful hack - displaying message...");
-        
-        // Start coroutine to display message
-        StartCoroutine(DisplaySuccessMessage());
-    }
-    
-    System.Collections.IEnumerator DisplaySuccessMessage()
-    {
-        // Brief wait to ensure everything is initialized
-        yield return new WaitForSeconds(0.1f);
-        
-        // Find the TMP using PlayerPrompt tag
-        GameObject promptObj = GameObject.FindGameObjectWithTag("PlayerPrompt");
-        if (promptObj != null)
+        // Update attempts text to show win message
+        if (attemptsRemainingText != null)
         {
-            TMPro.TextMeshProUGUI tmpText = promptObj.GetComponent<TMPro.TextMeshProUGUI>();
-            if (tmpText != null)
-            {
-                tmpText.text = successMessage;
-                tmpText.gameObject.SetActive(true);
-                Debug.Log("[HackingSceneManager] Success message displayed!");
-                
-                // Hide after duration
-                yield return new WaitForSeconds(successMessageDuration);
-                tmpText.gameObject.SetActive(false);
-            }
-            else
-            {
-                Debug.LogWarning("[HackingSceneManager] No TextMeshProUGUI found on PlayerPrompt object!");
-            }
+            attemptsRemainingText.text = winMessage;
+            attemptsRemainingText.gameObject.SetActive(true);
+        }
+        
+        // Enable the same button used for losing (ButtonLoss)
+        if (_lossButton == null)
+        {
+            FindAndHideLossButton(); // This will cache it
+        }
+        
+        if (_lossButton != null)
+        {
+            _lossButton.SetActive(true);
+            Debug.Log("[HackingSceneManager] Button enabled (showing win message)");
         }
         else
         {
-            Debug.LogWarning("[HackingSceneManager] PlayerPrompt object not found with tag 'PlayerPrompt'!");
+            Debug.LogWarning("[HackingSceneManager] Button with tag 'ButtonLoss' not found!");
         }
+        
+        // Show and unlock cursor
+        Cursor.visible = true;
+        Cursor.lockState = CursorLockMode.None;
+        Debug.Log("[HackingSceneManager] Cursor enabled and unlocked");
+        
+        // Disable player movement
+        DisablePlayerMovement();
     }
     
     public void ReturnToMainScene()
@@ -332,10 +339,13 @@ public class HackingSceneManager : MonoBehaviour
             Debug.LogError("[HackingSceneManager] Return scene name is not set!");
             return;
         }
-        
+
         // Restore before changing scenes
         RestoreOriginalDecayRate();
         
+        // Reset state flags
+        _isHandlingTestosteroneDepletion = false;
+
         Debug.Log($"[HackingSceneManager] Returning to scene '{returnSceneName}' - Hack successful: {LastHackWasSuccessful}");
         SceneManager.LoadScene(returnSceneName);
     }
@@ -376,24 +386,27 @@ public class HackingSceneManager : MonoBehaviour
         _isHandlingTestosteroneDepletion = true;
         _attemptCount++;
         
-        Debug.Log($"[HackingSceneManager] Testosterone depleted! Attempt count: {_attemptCount}");
+        Debug.Log($"[HackingSceneManager] Testosterone depleted! Attempt {_attemptCount} of {maxAttempts}");
         
-        // Check if second attempt is allowed
-        if (allowSecondAttempt && _attemptCount == 1)
+        // Update attempts display
+        UpdateAttemptsDisplay();
+        
+        // Check if more attempts are available
+        if (_attemptCount < maxAttempts)
         {
-            Debug.Log("[HackingSceneManager] Giving player second attempt...");
-            StartCoroutine(StartSecondAttempt());
+            Debug.Log($"[HackingSceneManager] Giving player attempt {_attemptCount + 1}...");
+            StartCoroutine(StartNextAttempt());
         }
         else
         {
-            Debug.Log("[HackingSceneManager] No more attempts - failing hack");
-            // Out of attempts, fail the hack
+            Debug.Log("[HackingSceneManager] No more attempts - failing hack and applying failure actions");
+            // Out of attempts, fail the hack and handle failure
             LastHackWasSuccessful = false;
-            ReturnToMainScene();
+            StartCoroutine(HandleAllAttemptsFailed());
         }
     }
     
-    System.Collections.IEnumerator StartSecondAttempt()
+    System.Collections.IEnumerator StartNextAttempt()
     {
         // Brief pause
         yield return new WaitForSeconds(0.5f);
@@ -403,14 +416,26 @@ public class HackingSceneManager : MonoBehaviour
         if (testSystem != null)
         {
             testSystem.ResetToStart();
-            Debug.Log("[HackingSceneManager] Testosterone refilled for second attempt");
+            Debug.Log($"[HackingSceneManager] Testosterone refilled for attempt {_attemptCount + 1}");
         }
         
         // Generate new map
         if (gridMaze != null)
         {
             gridMaze.RegenerateMap();
-            Debug.Log("[HackingSceneManager] New map generated for second attempt");
+            Debug.Log($"[HackingSceneManager] New map generated for attempt {_attemptCount + 1}");
+            
+            // Reset player to start position after map regeneration
+            var player = FindFirstObjectByType<GridBallPlayer>();
+            if (player != null)
+            {
+                player.ResetToMazeStart();
+                Debug.Log($"[HackingSceneManager] Player reset to maze start");
+            }
+            else
+            {
+                Debug.LogWarning("[HackingSceneManager] GridBallPlayer not found - cannot reset player position");
+            }
         }
         else
         {
@@ -419,5 +444,138 @@ public class HackingSceneManager : MonoBehaviour
         
         // Reset flag
         _isHandlingTestosteroneDepletion = false;
+    }
+    
+    System.Collections.IEnumerator HandleAllAttemptsFailed()
+    {
+        Debug.Log("[HackingSceneManager] All attempts exhausted - showing loss UI...");
+        
+        // Brief pause
+        yield return new WaitForSeconds(0.5f);
+        
+        // Update attempts text to show loss message
+        if (attemptsRemainingText != null)
+        {
+            attemptsRemainingText.text = lossMessage;
+            attemptsRemainingText.gameObject.SetActive(true);
+        }
+        
+        // Enable loss button (find it if we don't have it cached)
+        if (_lossButton == null)
+        {
+            FindAndHideLossButton(); // This will cache it
+        }
+        
+        if (_lossButton != null)
+        {
+            _lossButton.SetActive(true);
+            Debug.Log("[HackingSceneManager] Loss button enabled");
+        }
+        else
+        {
+            Debug.LogWarning("[HackingSceneManager] Loss button with tag 'ButtonLoss' not found!");
+        }
+        
+        // Show and unlock cursor
+        Cursor.visible = true;
+        Cursor.lockState = CursorLockMode.None;
+        Debug.Log("[HackingSceneManager] Cursor enabled and unlocked");
+        
+        // Disable player movement
+        DisablePlayerMovement();
+    }
+    
+    void UpdateAttemptsDisplay()
+    {
+        if (attemptsRemainingText == null) return;
+        
+        int attemptsLeft = maxAttempts - _attemptCount;
+        attemptsRemainingText.text = $"Attempts Remaining: {attemptsLeft}";
+        attemptsRemainingText.gameObject.SetActive(true);
+        
+        Debug.Log($"[HackingSceneManager] Updated attempts display: {attemptsLeft} remaining");
+    }
+    
+    void HideAttemptsDisplay()
+    {
+        if (attemptsRemainingText == null) return;
+        
+        attemptsRemainingText.gameObject.SetActive(false);
+    }
+    
+    /// <summary>
+    /// Public function to be called from the main menu button after loss.
+    /// Returns to the main menu.
+    /// </summary>
+    public void ReturnToMainMenu()
+    {
+        Debug.Log("[HackingSceneManager] Returning to main menu...");
+        
+        // Restore original testosterone decay rate
+        RestoreOriginalDecayRate();
+        
+        // Subscribe to scene loaded event to show menu after main scene loads
+        SceneManager.sceneLoaded += OnMenuSceneLoaded;
+        
+        // Mark as failed
+        LastHackWasSuccessful = false;
+        
+        // Load the main scene
+        ReturnToMainScene();
+    }
+    
+    void OnMenuSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        // Unsubscribe immediately
+        SceneManager.sceneLoaded -= OnMenuSceneLoaded;
+        
+        Debug.Log("[HackingSceneManager] Main scene loaded - showing menu...");
+        
+        // Use StartMenuController to show the menu
+        if (StartMenuController.Instance != null)
+        {
+            StartMenuController.Instance.ResetToMenu();
+        }
+        else
+        {
+            Debug.LogWarning("[HackingSceneManager] StartMenuController not found! Cannot show menu.");
+        }
+    }
+    
+    void DisablePlayerMovement()
+    {
+        // Find the player and disable movement components
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player != null)
+        {
+            // Disable common movement scripts
+            var playerMovement = player.GetComponent<PlayerMovement>();
+            if (playerMovement != null)
+            {
+                playerMovement.enabled = false;
+                Debug.Log("[HackingSceneManager] PlayerMovement disabled");
+            }
+            
+            // Disable CharacterController if present
+            var characterController = player.GetComponent<CharacterController>();
+            if (characterController != null)
+            {
+                characterController.enabled = false;
+                Debug.Log("[HackingSceneManager] CharacterController disabled");
+            }
+            
+            // Disable Rigidbody if present
+            var rb = player.GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector3.zero;
+                rb.isKinematic = true;
+                Debug.Log("[HackingSceneManager] Rigidbody set to kinematic");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("[HackingSceneManager] Player not found to disable movement!");
+        }
     }
 }

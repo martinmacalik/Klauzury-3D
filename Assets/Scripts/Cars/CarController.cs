@@ -55,8 +55,22 @@ public class WheelCarController : MonoBehaviour
     private void Start()
     {
         if (!carRB) carRB = GetComponent<Rigidbody>();
-        carRB.interpolation = RigidbodyInterpolation.Interpolate;
-        carRB.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        
+        if (carRB)
+        {
+            carRB.interpolation = RigidbodyInterpolation.Interpolate;
+            carRB.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        }
+        else
+        {
+            Debug.LogError($"[WheelCarController] {gameObject.name}: No Rigidbody found!");
+        }
+        
+        // Validate ray points
+        if (rayPoints == null || rayPoints.Length == 0)
+        {
+            Debug.LogError($"[WheelCarController] {gameObject.name}: No ray points assigned!");
+        }
     }
 
     private void Update()

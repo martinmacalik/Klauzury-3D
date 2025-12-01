@@ -90,6 +90,24 @@ public class NPCFlagBoost : MonoBehaviour
         testosteroneSystem.SetDecay(baseDecay);
     }
 
+    void OnDisable()
+    {
+        // Make sure to remove boost when this component is disabled (e.g., enemy dies)
+        if (isActive)
+        {
+            RemoveBoost();
+        }
+    }
+
+    void OnDestroy()
+    {
+        // Make sure to remove boost when this GameObject is destroyed
+        if (isActive)
+        {
+            RemoveBoost();
+        }
+    }
+
     void OnDrawGizmosSelected()
     {
         // Visualize detection radius in editor

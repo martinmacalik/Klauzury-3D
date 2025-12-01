@@ -28,7 +28,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0.141}
-  m_LocalScale: {x: 2.9350183, y: 2.9350183, z: 2.9350183}
+  m_LocalScale: {x: 3.4797578, y: 3.4797578, z: 3.4797578}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2625533901983525299}
@@ -66,19 +66,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a55d24b68a6cf38429208fd75eb7cb34, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  manualPlayerOverride: {fileID: 0}
+  manualCarCameraOverride: {fileID: 0}
   carController: {fileID: 3372190409909140953}
   aiDriver: {fileID: 1400438977130933011}
   playerRoot: {fileID: 0}
   enterTrigger: {fileID: 7077857590961117434}
   carCamera: {fileID: 0}
   carCamAnchor: {fileID: 5534288563298507332}
-  driverState: {fileID: 0}
+  driverState: {fileID: 4944911454852044629}
   exitAnchor: {fileID: 8058231554137151633}
   exitRightMeters: 1.5
   exitForwardMeters: 0.5
   groundRaycast: 2
   enterKey: 101
   exitKey: 102
+  playerLayerMask:
+    serializedVersion: 2
+    m_Bits: 2048
   postExitBrake: 0.6
   stopSpeedThreshold: 0.25
   maxBrakeTime: 2.5
@@ -1249,6 +1254,7 @@ MonoBehaviour:
     m_Bits: 64
   stopBuffer: 1
   currentIndex: 0
+  currentSpeed: 0
 --- !u!114 &4389767712312116744
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2078,7 +2084,7 @@ Transform:
   m_GameObject: {fileID: 8499698207175505155}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0.339, z: 0}
   m_LocalScale: {x: 0.01, y: 0.01, z: 0.01}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2186,8 +2192,8 @@ SkinnedMeshRenderer:
   m_BlendShapeWeights: []
   m_RootBone: {fileID: 8499698207175836983}
   m_AABB:
-    m_Center: {x: 0, y: 86.62144, z: -7.3431396}
-    m_Extent: {x: 102.45599, y: 96.43168, z: 26.668186}
+    m_Center: {x: 0, y: 99.985954, z: -5.049652}
+    m_Extent: {x: 102.45599, y: 83.06716, z: 28.961716}
   m_DirtyAABB: 0
 --- !u!1 &8499698207175510901
 GameObject:

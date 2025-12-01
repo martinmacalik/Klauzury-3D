@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class CarEnterExit : MonoBehaviour
@@ -7,10 +8,14 @@ public class CarEnterExit : MonoBehaviour
     public static CarEnterExit Active { get; private set; }
     static float globalEnterCooldownUntil = 0f;
 
+    // Optional manual overrides (assign in Inspector if auto-find fails)
+    [SerializeField] GameObject manualPlayerOverride;
+    [SerializeField] Camera manualCarCameraOverride;
+
     // core refs
     [SerializeField] WheelCarController carController;
     [SerializeField] CarAIDriver aiDriver;          // optional; stays off after first player drive
-    [SerializeField] GameObject playerRoot;         // has PlayerMovement + its own camera
+    [SerializeField] GameObject playerRoot;         // has PlayerMovement + its own camera (assign manually if auto-find fails)
     [SerializeField] Collider enterTrigger;         // trigger around the car (isTrigger = true)
 
     // car-only camera (separate from the player's)
@@ -29,6 +34,9 @@ public class CarEnterExit : MonoBehaviour
     // keys
     [SerializeField] KeyCode enterKey = KeyCode.E;
     [SerializeField] KeyCode exitKey  = KeyCode.F;
+    
+    // layer filtering
+    [SerializeField] LayerMask playerLayerMask = -1; // Set to "Player" layer in inspector
 
     // post-exit braking
     [SerializeField] float postExitBrake = 0.6f;      // 0..1 (negative throttle internally)
@@ -65,24 +73,107 @@ public class CarEnterExit : MonoBehaviour
         if (enterTrigger) enterTrigger.isTrigger = true;
 
         if (!driverState) driverState = GetComponentInParent<CarDriverState>();
+        
+        // Auto-configure player layer mask if it's set to "Everything" (-1) or "Nothing" (0)
+        if (playerLayerMask.value == -1 || playerLayerMask.value == 0)
+        {
+            int playerLayer = LayerMask.NameToLayer("Player");
+            if (playerLayer >= 0)
+            {
+                playerLayerMask = 1 << playerLayer;
+                Debug.Log($"[CarEnterExit] Auto-configured player layer mask to layer {playerLayer} (mask value: {playerLayerMask.value})");
+            }
+            else
+            {
+                // If Player layer doesn't exist, use Default layer as fallback
+                playerLayerMask = 1 << LayerMask.NameToLayer("Default");
+                Debug.LogWarning($"[CarEnterExit] Player layer not found, using Default layer instead (mask value: {playerLayerMask.value})");
+            }
+        }
 
-        // Auto-find car camera in scene if not assigned
+        // Use manual override first if provided
+        if (manualPlayerOverride != null && !playerRoot)
+        {
+            playerRoot = manualPlayerOverride;
+            Debug.Log($"[CarEnterExit] Using manual player override: {playerRoot.name}");
+        }
+        
+        // Auto-find player by tag if not assigned
+        if (!playerRoot)
+        {
+            // Try finding by tag first - most reliable method
+            GameObject taggedPlayer = GameObject.FindGameObjectWithTag("Player");
+            if (taggedPlayer != null)
+            {
+                playerRoot = taggedPlayer;
+                Debug.Log($"[CarEnterExit] Found player by tag: {playerRoot.name}");
+            }
+            else
+            {
+                // Fallback: search all GameObjects for one with Player tag on any layer
+                GameObject[] allObjects = FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                foreach (GameObject obj in allObjects)
+                {
+                    if (obj.CompareTag("Player"))
+                    {
+                        playerRoot = obj;
+                        Debug.Log($"[CarEnterExit] Found player by searching all objects: {playerRoot.name}");
+                        break;
+                    }
+                }
+                
+                // Last resort: try by name
+                if (playerRoot == null)
+                {
+                    playerRoot = GameObject.Find("Player");
+                    if (playerRoot == null)
+                        playerRoot = GameObject.Find("PlayerRoot");
+                    
+                    if (playerRoot != null)
+                        Debug.Log($"[CarEnterExit] Found player by name: {playerRoot.name}");
+                }
+            }
+            
+            if (playerRoot)
+            {
+                gun = playerRoot.GetComponentInChildren<SimpleGun>(true);
+            }
+            else
+            {
+                Debug.LogError("[CarEnterExit] CRITICAL: Could not find player object in any way!");
+            }
+        }
+        
+        // Auto-find car camera by tag if not assigned (including inactive objects)
         if (!carCamera)
         {
-            // Search all cameras in the scene (including inactive ones)
-            var allCams = FindObjectsOfType<Camera>(true); // true = include inactive
-            foreach (var cam in allCams)
+            Debug.Log("[CarEnterExit] Searching for CarCamera...");
+            
+            // Use FindObjectsByType with IncludeInactive to work in builds
+            Camera[] allCameras = FindObjectsByType<Camera>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            
+            Debug.Log($"[CarEnterExit] Found {allCameras.Length} cameras total");
+            
+            foreach (Camera cam in allCameras)
             {
-                // Skip main camera and player cameras
-                if (cam.CompareTag("MainCamera")) continue;
+                Debug.Log($"[CarEnterExit] Checking camera: {cam.name}, tag: {cam.tag}, active: {cam.gameObject.activeSelf}");
                 
-                // Look for a camera that's not parented to anything (scene root) or has a specific name
-                // You can customize this check based on your camera's name or tag
-                if (cam.name.Contains("Car") || cam.name.Contains("Vehicle") || cam.transform.parent == null && !cam.CompareTag("MainCamera"))
+                if (cam.CompareTag("CarCamera"))
                 {
                     carCamera = cam;
+                    Debug.Log($"[CarEnterExit] Found CarCamera: {cam.name}");
+                    if (carCamera.gameObject.activeSelf)
+                    {
+                        carCamera.gameObject.SetActive(false);
+                        Debug.Log("[CarEnterExit] Disabled CarCamera (was active)");
+                    }
                     break;
                 }
+            }
+            
+            if (!carCamera)
+            {
+                Debug.LogError("[CarEnterExit] CRITICAL: Could not find camera with 'CarCamera' tag!");
             }
         }
 
@@ -103,41 +194,292 @@ public class CarEnterExit : MonoBehaviour
         // Optional: if this car should **start** as the one you drive, set inCar true and call EnterCar() from Start().
     }
 
+    void Start()
+    {
+        StartCoroutine(InitializeWithRetry());
+    }
+    
+    IEnumerator InitializeWithRetry()
+    {
+        // Critical checks for build compatibility
+        Debug.Log($"[CarEnterExit] {gameObject.name} Start() - Beginning initialization checks...");
+        
+        // Wait one frame to ensure all objects are loaded
+        yield return null;
+        
+        // Retry finding player if not found (up to 3 attempts with delays)
+        int playerRetries = 0;
+        while (!playerRoot && playerRetries < 3)
+        {
+            Debug.Log($"[CarEnterExit] {gameObject.name}: Retry {playerRetries + 1} - Searching for player...");
+            
+            // Try FindGameObjectWithTag
+            GameObject taggedPlayer = null;
+            try
+            {
+                taggedPlayer = GameObject.FindGameObjectWithTag("Player");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[CarEnterExit] FindGameObjectWithTag failed: {e.Message}");
+            }
+            
+            if (taggedPlayer != null)
+            {
+                playerRoot = taggedPlayer;
+                Debug.Log($"[CarEnterExit] Found player by tag: {playerRoot.name}");
+            }
+            else
+            {
+                // Try FindObjectsByType
+                PlayerMovement[] allPlayers = FindObjectsByType<PlayerMovement>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                if (allPlayers != null && allPlayers.Length > 0)
+                {
+                    playerRoot = allPlayers[0].gameObject;
+                    Debug.Log($"[CarEnterExit] Found player by component search: {playerRoot.name}");
+                }
+            }
+            
+            if (!playerRoot)
+            {
+                playerRetries++;
+                yield return new WaitForSeconds(0.5f);
+            }
+        }
+        
+        if (!playerRoot)
+        {
+            Debug.LogError($"[CarEnterExit] {gameObject.name}: Player not found after retries! Car cannot be entered. Make sure Player object has 'Player' tag.");
+        }
+        else
+        {
+            Debug.Log($"[CarEnterExit] {gameObject.name}: Player found: {playerRoot.name}, tag: {playerRoot.tag}, layer: {LayerMask.LayerToName(playerRoot.layer)}");
+            gun = playerRoot.GetComponentInChildren<SimpleGun>(true);
+        }
+        
+        // Check manual camera override first
+        if (manualCarCameraOverride != null && !carCamera)
+        {
+            carCamera = manualCarCameraOverride;
+            Debug.Log($"[CarEnterExit] Using manual car camera override in retry: {carCamera.name}");
+        }
+        
+        // Retry finding car camera if not found
+        int cameraRetries = 0;
+        while (!carCamera && cameraRetries < 3)
+        {
+            Debug.Log($"[CarEnterExit] {gameObject.name}: Retry {cameraRetries + 1} - Searching for CarCamera...");
+            
+            Camera[] allCameras = FindObjectsByType<Camera>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            Debug.Log($"[CarEnterExit] Found {allCameras.Length} cameras in retry {cameraRetries + 1}");
+            
+            foreach (Camera cam in allCameras)
+            {
+                try
+                {
+                    if (cam.CompareTag("CarCamera"))
+                    {
+                        carCamera = cam;
+                        Debug.Log($"[CarEnterExit] Found CarCamera: {cam.name}");
+                        if (carCamera.gameObject.activeSelf)
+                        {
+                            carCamera.gameObject.SetActive(false);
+                        }
+                        break;
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"[CarEnterExit] Error checking camera tag on {cam.name}: {e.Message}");
+                }
+            }
+            
+            if (!carCamera)
+            {
+                cameraRetries++;
+                yield return new WaitForSeconds(0.5f);
+            }
+        }
+        
+        if (!carCamera)
+        {
+            Debug.LogError($"[CarEnterExit] {gameObject.name}: Car camera not found after retries! Car cannot be entered. Make sure there's a Camera with 'CarCamera' tag.");
+        }
+        else
+        {
+            Debug.Log($"[CarEnterExit] {gameObject.name}: Car camera found: {carCamera.name}");
+        }
+        
+        if (!carController)
+        {
+            Debug.LogError($"[CarEnterExit] {gameObject.name}: Car controller not assigned!");
+        }
+        else
+        {
+            Debug.Log($"[CarEnterExit] {gameObject.name}: Car controller found: {carController.name}");
+        }
+        
+        if (!enterTrigger)
+        {
+            Debug.LogWarning($"[CarEnterExit] {gameObject.name}: Enter trigger not assigned!");
+        }
+        else if (!enterTrigger.isTrigger)
+        {
+            Debug.LogWarning($"[CarEnterExit] {gameObject.name}: Enter trigger is not marked as trigger!");
+        }
+        else
+        {
+            Debug.Log($"[CarEnterExit] {gameObject.name}: Enter trigger configured: {enterTrigger.name}");
+        }
+        
+        // Check player layer configuration
+        int playerLayer = LayerMask.NameToLayer("Player");
+        if (playerLayer == -1)
+        {
+            Debug.LogError($"[CarEnterExit] {gameObject.name}: 'Player' layer does not exist in project! Please add it in Layer settings.");
+        }
+        else
+        {
+            Debug.Log($"[CarEnterExit] {gameObject.name}: Player layer exists: {playerLayer}");
+        }
+        
+        if (playerLayerMask.value == -1 || playerLayerMask.value == 0)
+        {
+            Debug.LogWarning($"[CarEnterExit] {gameObject.name}: Player layer mask not configured properly! Value: {playerLayerMask.value}");
+        }
+        else
+        {
+            Debug.Log($"[CarEnterExit] {gameObject.name}: Player layer mask configured: {playerLayerMask.value}");
+        }
+        
+        // Ensure AI driver is enabled on start if it exists and hasn't been locked out
+        if (aiDriver && !aiLockedOut && !inCar)
+        {
+            aiDriver.enabled = true;
+            Debug.Log($"[CarEnterExit] {gameObject.name}: AI driver enabled");
+        }
+        
+        Debug.Log($"[CarEnterExit] {gameObject.name} Start() - Initialization complete");
+    }
+
     void OnTriggerEnter(Collider other)
     {
         if (!playerRoot) return;
-        if (IsPlayerCollider(other)) playerInTrigger = true;
-        // (Show your "Press E to enter" UI here if you like)
+        
+        // FIRST: Check if this collider is on the player layer mask
+        int layer = other.gameObject.layer;
+        if ((playerLayerMask.value & (1 << layer)) == 0)
+        {
+            // Not on player layer, ignore completely (no logs)
+            return;
+        }
+        
+        Debug.Log($"[CarEnterExit] ============ TRIGGER ENTER ============");
+        Debug.Log($"[CarEnterExit] Collider: {other.name}");
+        Debug.Log($"[CarEnterExit] Tag: {other.tag}");
+        Debug.Log($"[CarEnterExit] GameObject: {other.gameObject.name}");
+        Debug.Log($"[CarEnterExit] Root: {other.transform.root.name}");
+        Debug.Log($"[CarEnterExit] Layer: {LayerMask.LayerToName(layer)} (passed layer mask check!)");
+        Debug.Log($"[CarEnterExit] PlayerRoot: {playerRoot.name}");
+        
+        Debug.Log($"[CarEnterExit] Checking if this is player...");
+        if (IsPlayerCollider(other))
+        {
+            playerInTrigger = true;
+            Debug.Log($"[CarEnterExit] ✓✓✓ PLAYER ENTERED TRIGGER ZONE! playerInTrigger={playerInTrigger} ✓✓✓");
+        }
+        else
+        {
+            Debug.Log($"[CarEnterExit] ✗✗✗ NOT PLAYER ✗✗✗");
+        }
+        Debug.Log($"[CarEnterExit] =======================================");
     }
 
     void OnTriggerExit(Collider other)
     {
         if (!playerRoot) return;
-        if (IsPlayerCollider(other)) playerInTrigger = false;
-        // (Hide the prompt UI here)
+        
+        // FIRST: Check if this collider is on the player layer mask
+        int layer = other.gameObject.layer;
+        if ((playerLayerMask.value & (1 << layer)) == 0)
+        {
+            // Not on player layer, ignore completely
+            return;
+        }
+        
+        Debug.Log($"[CarEnterExit] OnTriggerExit: {other.name} (layer: {LayerMask.LayerToName(layer)})");
+        
+        if (IsPlayerCollider(other))
+        {
+            playerInTrigger = false;
+            Debug.Log($"[CarEnterExit] Player exited trigger zone! playerInTrigger={playerInTrigger}");
+        }
     }
 
     bool IsPlayerCollider(Collider other)
     {
-        var root = other.attachedRigidbody ? other.attachedRigidbody.transform.root : other.transform.root;
-        return root == playerRoot.transform;
+        if (!playerRoot)
+        {
+            Debug.LogWarning("[CarEnterExit] IsPlayerCollider called but playerRoot is null!");
+            return false;
+        }
+        
+        // Check 1: Layer comparison (most reliable when layer is set correctly)
+        string layerName = LayerMask.LayerToName(other.gameObject.layer);
+        if (layerName == "Player")
+        {
+            Debug.Log($"[CarEnterExit] ✓ Layer match: {other.name} is on Player layer");
+            return true;
+        }
+        
+        // Check 2: Direct GameObject match
+        if (other.gameObject == playerRoot)
+        {
+            Debug.Log($"[CarEnterExit] ✓ Direct match: {other.name}");
+            return true;
+        }
+        
+        // Check 3: Tag comparison
+        if (other.CompareTag("Player"))
+        {
+            Debug.Log($"[CarEnterExit] ✓ Tag match: {other.name} has Player tag");
+            return true;
+        }
+        
+        // Check 4: Is the collider a child of playerRoot?
+        Transform current = other.transform;
+        while (current != null)
+        {
+            if (current.gameObject == playerRoot)
+            {
+                Debug.Log($"[CarEnterExit] ✓ Hierarchy match: {other.name} is child of {playerRoot.name}");
+                return true;
+            }
+            current = current.parent;
+        }
+        
+        // Check 5: Transform root match (with Rigidbody)
+        var rootWithRb = other.attachedRigidbody ? other.attachedRigidbody.transform.root : other.transform.root;
+        if (rootWithRb == playerRoot.transform)
+        {
+            Debug.Log($"[CarEnterExit] ✓ Root match (with RB): {other.name} -> {rootWithRb.name}");
+            return true;
+        }
+        
+        // Check 6: Transform root match (without Rigidbody consideration)
+        var rootDirect = other.transform.root;
+        if (rootDirect == playerRoot.transform)
+        {
+            Debug.Log($"[CarEnterExit] ✓ Direct root match: {other.name} -> {rootDirect.name}");
+            return true;
+        }
+        
+        Debug.Log($"[CarEnterExit] ✗ NOT player: {other.name}, root: {rootDirect.name}, tag: {other.tag}, layer: {layerName}, playerRoot: {playerRoot.name}");
+        return false;
     }
 
     void Update()
     {
-        // Auto-find player if not assigned
-        if (!playerRoot)
-        {
-            var playerObj = GameObject.FindGameObjectWithTag("Player");
-            if (playerObj)
-            {
-                playerRoot = playerObj;
-                
-                // Also find gun when we find the player
-                if (!gun)
-                    gun = playerRoot.GetComponentInChildren<SimpleGun>(true);
-            }
-        }
 
         // IMPORTANT: make sure idle cars ignore player input
         if (carController && !inCar)
@@ -155,11 +497,16 @@ public class CarEnterExit : MonoBehaviour
                                && Time.time >= localEnterCooldownUntil
                                && Time.time >= globalEnterCooldownUntil;
 
-        if (canAttemptEnter && Input.GetKeyDown(enterKey))
+        if (Input.GetKeyDown(enterKey))
         {
-            float speed = rb ? rb.linearVelocity.magnitude : 0f;
-            if (speed <= maxEnterSpeed)
+            if (!canAttemptEnter)
             {
+                Debug.Log($"[CarEnterExit] Cannot enter: inCar={inCar}, playerInTrigger={playerInTrigger}, Active={(Active != null ? Active.name : "null")}, localCooldown={Time.time >= localEnterCooldownUntil}, globalCooldown={Time.time >= globalEnterCooldownUntil}");
+            }
+            else
+            {
+                // Enter car immediately without speed check
+                Debug.Log($"[CarEnterExit] Entering car {name}...");
                 EnterCar();
                 return;
             }
@@ -167,12 +514,9 @@ public class CarEnterExit : MonoBehaviour
 
         if (inCar && Input.GetKeyDown(exitKey))
         {
-            float speed = rb ? rb.linearVelocity.magnitude : 0f;
-            if (speed <= maxExitSpeed)
-            {
-                ExitCar();
-                return;
-            }
+            // Exit car immediately without speed check
+            ExitCar();
+            return;
         }
     }
 
@@ -230,6 +574,16 @@ public class CarEnterExit : MonoBehaviour
     {
         if (!playerRoot || !carController) return;
 
+        // Check speed FIRST before changing anything
+        float currentSpeed = rb ? rb.linearVelocity.magnitude : 0f;
+        bool shouldBrake = currentSpeed > stopSpeedThreshold;
+        
+        Debug.Log($"[CarEnterExit] Exiting car at {currentSpeed:F2} m/s - will brake: {shouldBrake}");
+        
+        // Clear inputs and switch to external control
+        carController.SetControlMode(WheelCarController.ControlMode.External);
+        carController.SetExternalInputs(0f, 0f);
+
         // choose exit pose
         Vector3 worldPos;
         Quaternion worldRot;
@@ -263,6 +617,13 @@ public class CarEnterExit : MonoBehaviour
         playerRoot.SetActive(true);
         WeaponHotkeys.GunIsReady = true;
 
+        // Apply high drag immediately to help slow down
+        if (rb)
+        {
+            rb.linearDamping = parkedDrag;
+            rb.angularDamping = parkedAngularDrag;
+        }
+
         // do NOT re-enable AI if we've ever driven this car
         if (aiDriver && !aiLockedOut)
         {
@@ -272,12 +633,12 @@ public class CarEnterExit : MonoBehaviour
         }
         else
         {
-            // leave car in External mode with our controlled coasting brake
-            carController.SetControlMode(WheelCarController.ControlMode.External);
-
-            // start a brief braking phase so it rolls to a stop
-            if (brakeCo != null) StopCoroutine(brakeCo);
-            brakeCo = StartCoroutine(PostExitBrakeThenPark());
+            // Start braking coroutine if car was moving
+            if (shouldBrake)
+            {
+                if (brakeCo != null) StopCoroutine(brakeCo);
+                brakeCo = StartCoroutine(PostExitBrakeThenPark());
+            }
         }
 
         inCar = false;
@@ -289,14 +650,6 @@ public class CarEnterExit : MonoBehaviour
 
         // also, mark we're no longer inside trigger until physics says so (prevents single-frame re-entry)
         playerInTrigger = false;
-        
-        // hand off control to External and CLEAR inputs right away
-        carController.SetControlMode(WheelCarController.ControlMode.External);
-        carController.SetExternalInputs(0f, 0f);
-
-        // start a brief braking phase → then park
-        if (brakeCo != null) StopCoroutine(brakeCo);
-        brakeCo = StartCoroutine(PostExitBrakeThenPark());
     }
 
     IEnumerator PostExitBrakeThenPark()
@@ -306,7 +659,7 @@ public class CarEnterExit : MonoBehaviour
         // Phase 1: gentle braking until stopped or timeout
         while (t < maxBrakeTime)
         {
-            float speed = rb ? rb.linearVelocity.magnitude : 0f;  // <- use velocity, not linearVelocity
+            float speed = rb ? rb.linearVelocity.magnitude : 0f;
             if (speed <= stopSpeedThreshold) break;
 
             // negative "throttle" as a brake, no steering
@@ -316,17 +669,10 @@ public class CarEnterExit : MonoBehaviour
             yield return null;
         }
 
-        // Neutralize inputs
+        // Neutralize inputs and let the high drag finish the job
         carController.SetExternalInputs(0f, 0f);
-
-        // Phase 2: park — increase drag so it stays put, and zero out motion
-        if (rb)
-        {
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
-            rb.linearDamping = parkedDrag;
-            rb.angularDamping = parkedAngularDrag;
-        }
+        
+        Debug.Log("[CarEnterExit] Braking complete - car will coast to stop with high drag");
     }
 
 

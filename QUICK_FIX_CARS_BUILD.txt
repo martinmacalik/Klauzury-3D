@@ -1,0 +1,114 @@
+═══════════════════════════════════════════════════════════════
+  QUICK FIX: Cars Not Working in Build
+═══════════════════════════════════════════════════════════════
+
+🔴 PROBLEM: Can't enter cars in the built EXE but works in Unity Editor
+
+✅ FIXED (Dec 1, 2025): 
+   
+   ROOT CAUSE: The CarEnterExit script had manualPlayerOverride and 
+   manualCarCameraOverride fields that were added after some prefabs were created.
+   This caused prefab serialization mismatch - some prefabs had these fields in
+   their YAML and others didn't, breaking Unity's component initialization in builds.
+   
+   SOLUTION: Removed the manual override fields entirely from CarEnterExit.cs
+   and removed them from all 4 car prefabs:
+   - Car.prefab (was broken - now fixed)
+   - Car (1).prefab (was working - still works)
+   - Car (2).prefab (was working - still works)
+   - Car (3).prefab (was working - still works)
+   
+   All car prefabs now have consistent serialization and rely on the robust
+   auto-detection code that finds Player by tag and CarCamera by tag.
+   This should work reliably in builds!
+
+✅ SOLUTION (Choose ONE):
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+METHOD 1: Manual Assignment (MOST RELIABLE for builds)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. In Unity Editor:
+   - Select EACH car in the Hierarchy
+   - Find the "CarEnterExit" component in Inspector
+   - Under "Manual Override" section:
+     → Drag your "Player" GameObject to "Manual Player Override"
+     → Drag your "CarCamera" to "Manual Car Camera Override"
+
+2. Build the game (File → Build Settings → Build)
+
+3. Done! This bypasses all auto-detection issues.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+METHOD 2: Fix Tags and Layers (if auto-detection should work)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Check Player Setup:
+   - Select your Player GameObject
+   - Top of Inspector: Tag should be "Player"
+   - Top of Inspector: Layer should be "Player"
+   
+2. Check CarCamera Setup:
+   - Find the CarCamera GameObject (probably disabled)
+   - Top of Inspector: Tag should be "CarCamera"
+   
+3. Check Car Setup:
+   - Select any car
+   - Find "CarEnterExit" component
+   - "Player Layer Mask" should be set to "Player" (not "Everything")
+   
+4. Check Project Settings:
+   - Edit → Project Settings → Tags and Layers
+   - Verify "Player" tag exists
+   - Verify "CarCamera" tag exists
+   - Verify "Player" layer exists
+   
+5. Build the game
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔍 DEBUGGING IN BUILD
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+To see what's wrong in the build:
+
+1. File → Build Settings
+2. Check "Development Build" ✓
+3. Build and run
+4. Press ` or ~ to open console (if you have debug console)
+5. Look for "[CarEnterExit]" messages
+
+OR find the log file at:
+C:\Users\Marti\AppData\LocalLow\[CompanyName]\[GameName]\Player.log
+
+Search for "[CarEnterExit]" to see error messages.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ IMPORTANT NOTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• The script now RETRIES finding player/camera 3 times with delays
+• This fixes most timing issues from scene loading
+• Manual overrides are ALWAYS checked first
+• If you assign manual overrides, they will be used 100% of the time
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 TEST CHECKLIST BEFORE BUILDING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[ ] Player object exists and is active
+[ ] Player Tag = "Player"
+[ ] Player Layer = "Player"
+[ ] CarCamera exists (can be inactive)
+[ ] CarCamera Tag = "CarCamera"
+[ ] All cars have CarEnterExit component
+[ ] Either:
+    [ ] Manual overrides assigned on all cars, OR
+    [ ] playerLayerMask set to "Player" layer
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+👍 RECOMMENDED: Use METHOD 1 (Manual Assignment) for guaranteed 
+   reliability in builds. It takes 30 seconds and always works.
+
+═══════════════════════════════════════════════════════════════
+

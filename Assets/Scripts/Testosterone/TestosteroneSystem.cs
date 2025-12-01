@@ -9,7 +9,7 @@ public class TestosteroneSystem : MonoBehaviour
 
     [Header("Tuning")]
     [SerializeField] private float maxValue = 100f;
-    [SerializeField] private float startValue = 60f;
+    [SerializeField] private float startValue = 100f;
     [SerializeField] private float decayPerSecond = 0.5f;
 
     [Header("Game Over")]
@@ -121,11 +121,26 @@ public class TestosteroneSystem : MonoBehaviour
 
     private IEnumerator ShowGameOverAndReset()
     {
+        // Check if we're currently IN the hacking scene
+        // HackingSceneManager persists across scenes, so we need to check the actual scene
+        string currentScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+        bool isInHackingScene = HackingSceneManager.Instance != null && 
+                                !currentScene.Equals(HackingSceneManager.Instance.returnSceneName, System.StringComparison.OrdinalIgnoreCase);
+        
+        if (isInHackingScene)
+        {
+            Debug.Log($"[TestosteroneSystem] Currently in hacking scene '{currentScene}' - HackingSceneManager will handle depletion");
+            yield break;
+        }
+
+        Debug.Log($"[TestosteroneSystem] Testosterone depleted in main scene '{currentScene}' - showing game over");
+
         // Show "You Lost" message
         if (gameOverText != null)
         {
             gameOverText.text = gameOverMessage;
             gameOverText.gameObject.SetActive(true);
+            Debug.Log("[TestosteroneSystem] Game over text displayed");
 
             // Show background if assigned
             if (gameOverBackground != null)
@@ -141,15 +156,24 @@ public class TestosteroneSystem : MonoBehaviour
             if (gameOverBackground != null)
                 gameOverBackground.SetActive(false);
         }
+        else
+        {
+            Debug.LogWarning("[TestosteroneSystem] Game over text not assigned! Waiting 2 seconds before menu...");
+            // Wait a bit even if no UI is assigned
+            yield return new WaitForSeconds(2f);
+        }
 
-        // Use the singleton instance to reset to menu
+        // Try to use StartMenuController
         if (StartMenuController.Instance != null)
         {
+            Debug.Log("[TestosteroneSystem] Calling StartMenuController.ResetToMenu()");
             StartMenuController.Instance.ResetToMenu();
         }
         else
         {
-            Debug.LogWarning("TestosteroneSystem: No StartMenuController found to reset to menu!");
+            // Fallback: directly load the menu scene
+            Debug.LogWarning("[TestosteroneSystem] No StartMenuController found! Loading menu scene directly...");
+            UnityEngine.SceneManagement.SceneManager.LoadScene(0); // Load first scene (usually menu)
         }
     }
 }

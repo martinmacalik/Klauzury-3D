@@ -69,35 +69,6 @@ public class HackingBox : MonoBehaviour
         }
     }
     
-    [Header("Return Spawn Location")]
-    [Tooltip("Position where player will spawn when returning from hack (set in HackingSceneManager)")]
-    public Transform playerSpawnPoint;
-    
-    [ContextMenu("Set Spawn From This Position")]
-    void SetSpawnFromThisPosition()
-    {
-        var manager = HackingSceneManager.Instance;
-        if (manager == null)
-        {
-            Debug.LogWarning("[HackingBox] HackingSceneManager not found! Make sure it's on your GameController.");
-            return;
-        }
-        
-        Vector3 spawnPos = playerSpawnPoint != null ? playerSpawnPoint.position : transform.position + transform.forward * 2f;
-        Vector3 spawnRot = playerSpawnPoint != null ? playerSpawnPoint.eulerAngles : transform.eulerAngles;
-        
-        // Use reflection to set the values since they're public fields
-        var posField = manager.GetType().GetField("returnSpawnPosition");
-        var rotField = manager.GetType().GetField("returnSpawnRotation");
-        
-        if (posField != null && rotField != null)
-        {
-            posField.SetValue(manager, spawnPos);
-            rotField.SetValue(manager, spawnRot);
-            Debug.Log($"[HackingBox] Set spawn position to {spawnPos} with rotation {spawnRot}");
-        }
-    }
-    
     [Header("Scene to Load")]
     [Tooltip("Name of the hacking scene to load")]
     public string hackingSceneName = "HackingScene";
@@ -141,41 +112,92 @@ public class HackingBox : MonoBehaviour
         {
             Debug.Log("[HackingBox] Player successfully completed the hack!");
             _isHacked = true;
-            
-            // Reposition player if needed
-            if (HackingSceneManager.ShouldRepositionPlayer)
-            {
-                RepositionPlayer();
-            }
-            
             HackingSceneManager.ResetHackStatus(); // Clear the flag
+            
+            // Show win UI
+            ShowWinUI();
             
             // You can add rewards here, trigger events, etc.
             // Example: GameEvents.OnHackingBoxCompleted?.Invoke();
         }
     }
     
-    void RepositionPlayer()
+    void ShowWinUI()
     {
-        // Find the player
-        GameObject player = GameObject.FindGameObjectWithTag("Player");
-        if (player == null)
+        var manager = HackingSceneManager.Instance;
+        if (manager == null)
         {
-            Debug.LogWarning("[HackingBox] Player not found with tag 'Player' - trying PlayerRoot");
-            player = GameObject.Find("PlayerRoot");
+            Debug.LogWarning("[HackingBox] HackingSceneManager not found!");
+            return;
         }
         
-        if (player != null)
+        // Show win message in attempts text
+        if (manager.attemptsRemainingText != null)
         {
-            // Set position and rotation
-            player.transform.position = HackingSceneManager.SpawnPosition;
-            player.transform.eulerAngles = HackingSceneManager.SpawnRotation;
+            manager.attemptsRemainingText.text = manager.winMessage;
+            manager.attemptsRemainingText.gameObject.SetActive(true);
+            Debug.Log("[HackingBox] Win message displayed");
+        }
+        
+        // Find and enable the same button used for losing (ButtonLoss)
+        GameObject button = GameObject.FindGameObjectWithTag("ButtonLoss");
+        if (button != null)
+        {
+            button.SetActive(true);
+            Debug.Log("[HackingBox] Button enabled (showing win message)");
             
-            Debug.Log($"[HackingBox] Player repositioned to {HackingSceneManager.SpawnPosition} with rotation {HackingSceneManager.SpawnRotation}");
+            // Register click handler if not already registered
+            var buttonComponent = button.GetComponent<UnityEngine.UI.Button>();
+            if (buttonComponent != null)
+            {
+                buttonComponent.onClick.RemoveAllListeners();
+                buttonComponent.onClick.AddListener(() => manager.ReturnToMainMenu());
+            }
         }
         else
         {
-            Debug.LogWarning("[HackingBox] Could not find player to reposition!");
+            Debug.LogWarning("[HackingBox] Button with tag 'ButtonLoss' not found!");
+        }
+        
+        // Show and unlock cursor
+        Cursor.visible = true;
+        Cursor.lockState = CursorLockMode.None;
+        Debug.Log("[HackingBox] Cursor enabled and unlocked");
+        
+        // Disable player movement
+        DisablePlayerMovement();
+    }
+    
+    void DisablePlayerMovement()
+    {
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player != null)
+        {
+            var playerMovement = player.GetComponent<PlayerMovement>();
+            if (playerMovement != null)
+            {
+                playerMovement.enabled = false;
+                Debug.Log("[HackingBox] PlayerMovement disabled");
+            }
+            
+            var characterController = player.GetComponent<CharacterController>();
+            if (characterController != null)
+            {
+                characterController.enabled = false;
+                Debug.Log("[HackingBox] CharacterController disabled");
+            }
+            
+            var rb = player.GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector3.zero;
+                rb.isKinematic = true;
+                Debug.Log("[HackingBox] Rigidbody set to kinematic");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("[HackingBox] Player not found to disable movement!");
         }
     }
     
